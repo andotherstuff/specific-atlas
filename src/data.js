@@ -57,13 +57,19 @@ export const NODES = [
     id: "flavin-judd", type: "person", title: "Flavin Judd", start: 1968,
     content:
       "Judd's son, born 1968 and named for Dan Flavin. Now artistic director of Judd Foundation, he has overseen the restoration of 101 Spring Street and the Marfa properties — the steward who keeps the installations exactly as his father fixed them.",
-    edges: [["donald-judd", "son of"], ["dan-flavin", "namesake of"], ["judd-foundation", "leads"]],
+    edges: [["donald-judd", "son of"], ["rainer-judd", "brother of"], ["dan-flavin", "namesake of"], ["judd-foundation", "leads"]],
   },
   {
     id: "rainer-judd", type: "person", title: "Rainer Judd", start: 1970,
     content:
       "Judd's daughter, born 1970 and named for the dancer Yvonne Rainer. A filmmaker, she is president of Judd Foundation. Her childhood ran between a SoHo loft and the Texas desert, both arranged with her father's exacting sense of order.",
-    edges: [["donald-judd", "daughter of"], ["judd-foundation", "presides over"]],
+    edges: [["donald-judd", "daughter of"], ["flavin-judd", "sister of"], ["yvonne-rainer", "namesake of"], ["judd-foundation", "presides over"]],
+  },
+  {
+    id: "yvonne-rainer", type: "person", title: "Yvonne Rainer", start: 1934,
+    content:
+      "Dancer, choreographer, and later filmmaker; a founder of the Judson Dance Theater (1962) and author of the 1965 \"No Manifesto,\" which stripped dance of spectacle and virtuosity much as Judd stripped art of illusion. A friend of Julie Finch in the downtown dance world, she is the dancer for whom Judd and Finch named their daughter, Rainer.",
+    edges: [["donald-judd", "friend of"], ["julie-finch", "friend of"]],
   },
   {
     id: "marianne-stockebrand", type: "person", title: "Marianne Stockebrand", start: 1955,
