@@ -474,7 +474,7 @@ body {
 
   #stage-overlay {
     top: calc(12px + env(safe-area-inset-top));
-    left: 58px;
+    left: calc(82px + env(safe-area-inset-left));
     right: 12px;
     width: auto;
     transform: none;
