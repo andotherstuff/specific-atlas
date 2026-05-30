@@ -1,0 +1,13 @@
+{
+  "name": "specific-atlas",
+  "version": "1.0.0",
+  "description": "A real-Nostr interactive atlas of Donald Judd's life, work, geographies, and ideas.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8011"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.10.4",
+    "puppeteer-core": "^23.11.1"
+  }
+}
