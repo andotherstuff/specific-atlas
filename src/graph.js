@@ -7,6 +7,7 @@ export class Graph {
     this.types = types;
     this.onSelect = onSelect || (() => {});
     this.layout = "force";
+    this.viewportMode = "desktop";
     this.timeRange = null; // [start,end] or null
     this.activeTypes = new Set(Object.keys(types));
     this.selectedId = null;
@@ -22,6 +23,33 @@ export class Graph {
     this._build();
     this._sim();
     this._applyVisibility();
+    window.setTimeout(() => this.fitToView({ duration: 0, force: false }), 900);
+  }
+
+  _settings() {
+    return this.viewportMode === "mobile"
+      ? {
+          baseRadius: 5,
+          degreeRadius: 2.4,
+          hubRadius: 16,
+          hitRadius: 22,
+          charge: -145,
+          linkDistance: 48,
+          hubLinkDistance: 66,
+          collisionPadding: 13,
+          geoPad: 34,
+        }
+      : {
+          baseRadius: 6,
+          degreeRadius: 3.2,
+          hubRadius: 22,
+          hitRadius: 16,
+          charge: -260,
+          linkDistance: 70,
+          hubLinkDistance: 90,
+          collisionPadding: 10,
+          geoPad: 90,
+        };
   }
 
   _build() {
@@ -80,7 +108,8 @@ export class Graph {
     }
     for (const n of this.nodes) {
       n.deg = deg.get(n.id) || 0;
-      n.r = n.id === "donald-judd" ? 22 : 6 + Math.sqrt(n.deg) * 3.2;
+      const settings = this._settings();
+      n.r = n.id === "donald-judd" ? settings.hubRadius : settings.baseRadius + Math.sqrt(n.deg) * settings.degreeRadius;
       n.type = this.types[n.type] ? n.type : "concept";
       if (n.x == null) n.x = this.W / 2;
       if (n.y == null) n.y = this.H / 2;
@@ -122,6 +151,7 @@ export class Graph {
       .join(
         (enter) => {
           const g = enter.append("g").attr("class", "node").style("cursor", "pointer");
+          g.append("circle").attr("class", "node-hit");
           g.append("circle").attr("class", "node-dot");
           g.append("circle").attr("class", "node-ring").attr("fill", "none");
           g.append("text").attr("class", "node-label").text((d) => d.title);
@@ -140,6 +170,8 @@ export class Graph {
       .on("mouseleave", () => this._hover(null))
       .call(drag);
 
+    this.nodeSel.classed("hub", (d) => d.id === "donald-judd");
+    this.nodeSel.select(".node-hit").attr("r", (d) => Math.max(this._settings().hitRadius, d.r + 8));
     this.nodeSel.select(".node-dot").attr("r", (d) => d.r).attr("fill", (d) => this._typeDef(d.type).color);
     this.nodeSel.select(".node-ring").attr("r", (d) => d.r + 4);
     this.nodeSel
@@ -149,6 +181,7 @@ export class Graph {
   }
 
   _sim() {
+    const settings = this._settings();
     this.simulation = d3
       .forceSimulation(this.nodes)
       .force(
@@ -156,11 +189,11 @@ export class Graph {
         d3
           .forceLink(this.links)
           .id((d) => d.id)
-          .distance((l) => (this._id(l.source) === "donald-judd" || this._id(l.target) === "donald-judd" ? 90 : 70))
+          .distance((l) => (this._id(l.source) === "donald-judd" || this._id(l.target) === "donald-judd" ? settings.hubLinkDistance : settings.linkDistance))
           .strength(0.25)
       )
-      .force("charge", d3.forceManyBody().strength(-260))
-      .force("collide", d3.forceCollide().radius((d) => d.r + 10))
+      .force("charge", d3.forceManyBody().strength(settings.charge))
+      .force("collide", d3.forceCollide().radius((d) => d.r + settings.collisionPadding))
       .force("center", d3.forceCenter(this.W / 2, this.H / 2))
       .force("x", d3.forceX(this.W / 2).strength(0.03))
       .force("y", d3.forceY(this.H / 2).strength(0.03))
@@ -222,6 +255,28 @@ export class Graph {
     this.svg.transition().duration(600).call(this.zoom.transform, d3.zoomIdentity);
   }
 
+  fitToView({ duration = 450, force = true } = {}) {
+    if (!this.nodes.length || this.selectedId) return;
+    if (!force && this.viewportMode !== "mobile") return;
+    const visible = this.nodes.filter((n) => this._visible(n));
+    const fitNodes = visible.length ? visible : this.nodes;
+    const ready = fitNodes.filter((n) => Number.isFinite(n.x) && Number.isFinite(n.y));
+    if (!ready.length) return;
+    const minX = d3.min(ready, (n) => n.x - n.r);
+    const maxX = d3.max(ready, (n) => n.x + n.r);
+    const minY = d3.min(ready, (n) => n.y - n.r);
+    const maxY = d3.max(ready, (n) => n.y + n.r);
+    const w = Math.max(1, maxX - minX);
+    const h = Math.max(1, maxY - minY);
+    const pad = this.viewportMode === "mobile" ? 44 : 80;
+    const scale = Math.max(0.25, Math.min(2.2, Math.min((this.W - pad * 2) / w, (this.H - pad * 2) / h)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const t = d3.zoomIdentity.translate(this.W / 2, this.H / 2).scale(scale).translate(-cx, -cy);
+    const target = duration ? this.svg.transition().duration(duration) : this.svg;
+    target.call(this.zoom.transform, t);
+  }
+
   // ---- filters ----------------------------------------------------------
   setTypes(activeSet) {
     this.activeTypes = new Set(activeSet);
@@ -261,6 +316,7 @@ export class Graph {
   }
 
   _forceLayout() {
+    const settings = this._settings();
     this.gMap.selectAll("*").remove();
     for (const n of this.nodes) {
       n.fx = null;
@@ -268,9 +324,10 @@ export class Graph {
     }
     this.simulation
       .force("link")
-      .distance((l) => (this._id(l.source) === "donald-judd" || this._id(l.target) === "donald-judd" ? 90 : 70))
+      .distance((l) => (this._id(l.source) === "donald-judd" || this._id(l.target) === "donald-judd" ? settings.hubLinkDistance : settings.linkDistance))
       .strength(0.25);
-    this.simulation.force("charge").strength(-260);
+    this.simulation.force("charge").strength(settings.charge);
+    this.simulation.force("collide").radius((d) => d.r + settings.collisionPadding);
     this.simulation.alpha(0.9).restart();
   }
 
@@ -283,7 +340,7 @@ export class Graph {
         geometry: { type: "Point", coordinates: [n.lon, n.lat] },
       })),
     };
-    const pad = 90;
+    const pad = this._settings().geoPad;
     const projection = d3
       .geoMercator()
       .fitExtent([[pad, pad], [this.W - pad, this.H - pad]], fc);
@@ -341,6 +398,24 @@ export class Graph {
     this.simulation.force("center", d3.forceCenter(this.W / 2, this.H / 2));
     if (this.layout === "geo") this._geoLayout();
     else this.simulation.alpha(0.3).restart();
+    window.setTimeout(() => this.fitToView({ duration: 250, force: false }), 250);
+  }
+
+  setViewportMode(mode) {
+    const next = mode === "mobile" ? "mobile" : "desktop";
+    if (next === this.viewportMode) return;
+    this.viewportMode = next;
+    this._recompute();
+    this._render();
+    if (!this.simulation) return;
+    this.simulation.force("collide").radius((d) => d.r + this._settings().collisionPadding);
+    this.simulation.nodes(this.nodes);
+    this.simulation.force("link").links(this.links);
+    if (this.layout === "geo") this._geoLayout();
+    else this._forceLayout();
+    this._applyVisibility();
+    this._applyHighlight(this.selectedId);
+    window.setTimeout(() => this.fitToView({ duration: 350, force: false }), 500);
   }
 
   // add a node that arrived live (or was just published)

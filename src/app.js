@@ -67,6 +67,22 @@ NODES.forEach((node) => {
   node._state = "curated";
 });
 
+const mobileQuery = window.matchMedia("(max-width: 820px)");
+const uiState = {
+  isMobile: mobileQuery.matches,
+  railOpen: false,
+  panelMode: "open", // desktop: open/collapsed; mobile: closed/peek/expanded
+};
+let responsiveInitialized = false;
+
+function debounce(fn, wait = 120) {
+  let timer = null;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), wait);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Graph
 // ---------------------------------------------------------------------------
@@ -75,20 +91,78 @@ const graph = new Graph($("#graph"), {
   links: index.links,
   types: TYPES,
   onSelect: (n) => {
-    if (n) setPanelCollapsed(false);
+    if (n) setPanelMode(uiState.isMobile ? "peek" : "open");
+    else if (uiState.isMobile) setPanelMode("closed");
     renderPanel(n ? index.byId.get(n.id) || n : null);
   },
 });
-window.addEventListener("resize", () => graph.resize());
+graph.setViewportMode(uiState.isMobile ? "mobile" : "desktop");
+window.addEventListener("resize", debounce(() => {
+  updateResponsiveState();
+  graph.resize();
+}));
+mobileQuery.addEventListener("change", updateResponsiveState);
 
-function setPanelCollapsed(collapsed) {
-  $("#app").classList.toggle("panel-collapsed", collapsed);
-  $("#panel-open").hidden = !collapsed;
+function updateResponsiveState() {
+  const wasMobile = uiState.isMobile;
+  uiState.isMobile = mobileQuery.matches;
+  const changed = !responsiveInitialized || wasMobile !== uiState.isMobile;
+  responsiveInitialized = true;
+  document.documentElement.classList.toggle("is-mobile", uiState.isMobile);
+  graph.setViewportMode(uiState.isMobile ? "mobile" : "desktop");
+  if (changed) {
+    setRailOpen(false);
+    setPanelMode(uiState.isMobile ? (graph.selectedId ? "peek" : "closed") : "open");
+  } else {
+    applyUiClasses();
+  }
   requestAnimationFrame(() => graph.resize());
 }
 
-$("#panel-close").addEventListener("click", () => setPanelCollapsed(true));
-$("#panel-open").addEventListener("click", () => setPanelCollapsed(false));
+function setRailOpen(open) {
+  uiState.railOpen = open && uiState.isMobile;
+  applyUiClasses();
+}
+
+function setPanelMode(mode) {
+  if (uiState.isMobile) {
+    uiState.panelMode = mode;
+  } else {
+    uiState.panelMode = mode === "collapsed" || mode === "closed" ? "collapsed" : "open";
+  }
+  applyUiClasses();
+  requestAnimationFrame(() => graph.resize());
+}
+
+function applyUiClasses() {
+  const app = $("#app");
+  const railScrim = $("#rail-scrim");
+  const mobileMenu = $("#mobile-menu");
+  const panelHandle = $("#panel-handle");
+  const panelClose = $("#panel-close");
+  document.documentElement.classList.toggle("is-mobile", uiState.isMobile);
+  app.classList.toggle("rail-open", uiState.railOpen);
+  railScrim.hidden = !(uiState.isMobile && uiState.railOpen);
+  app.classList.toggle("panel-collapsed", !uiState.isMobile && uiState.panelMode === "collapsed");
+  app.classList.toggle("panel-closed", uiState.isMobile && uiState.panelMode === "closed");
+  app.classList.toggle("panel-peek", uiState.isMobile && uiState.panelMode === "peek");
+  app.classList.toggle("panel-expanded", uiState.isMobile && uiState.panelMode === "expanded");
+  $("#panel-open").hidden = uiState.isMobile || uiState.panelMode !== "collapsed";
+  mobileMenu.setAttribute("aria-expanded", String(uiState.railOpen));
+  panelHandle.setAttribute("aria-expanded", String(uiState.panelMode === "expanded"));
+  panelClose.setAttribute("aria-label", uiState.isMobile ? "Close detail sheet" : "Close detail panel");
+}
+
+$("#panel-close").addEventListener("click", () => setPanelMode(uiState.isMobile ? "closed" : "collapsed"));
+$("#panel-open").addEventListener("click", () => setPanelMode("open"));
+$("#panel-handle").addEventListener("click", () => {
+  if (!uiState.isMobile) return;
+  setPanelMode(uiState.panelMode === "expanded" ? "peek" : "expanded");
+});
+$("#mobile-menu").addEventListener("click", () => setRailOpen(true));
+$("#rail-scrim").addEventListener("click", () => setRailOpen(false));
+$("#mobile-add").addEventListener("click", () => $("#add-node").click());
+updateResponsiveState();
 
 // ---------------------------------------------------------------------------
 // Lens toggle (force vs geography)
@@ -101,6 +175,7 @@ $$("#layout-toggle button").forEach((b) =>
     graph.setLayout(mode);
     $("#geo-caption").hidden = mode !== "geo";
     $("#geo-list-wrap").hidden = mode !== "geo";
+    if (uiState.isMobile) setRailOpen(false);
   })
 );
 
@@ -211,6 +286,7 @@ function renderGeoList() {
     li.addEventListener("click", () => {
       graph.select(n.id);
       graph.centerOn(n.id);
+      if (uiState.isMobile) setRailOpen(false);
     });
     geoList.appendChild(li);
   });
@@ -521,7 +597,9 @@ function renderProposalQueue() {
     }
     li.addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") return;
+      setPanelMode(uiState.isMobile ? "peek" : "open");
       renderPanel(entry.node);
+      if (uiState.isMobile) setRailOpen(false);
     });
     list.append(li);
   }
