@@ -37,7 +37,6 @@ const SEED_BASE = 1_704_067_200; // 2024-01-01T00:00:00Z
 export const RELAYS = [
   "wss://relay.damus.io",
   "wss://nos.lol",
-  "wss://relay.nostr.band",
   "wss://relay.primal.net",
   "wss://nostr.mom",
 ];
