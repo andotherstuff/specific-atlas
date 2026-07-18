@@ -11,6 +11,9 @@ export class Graph {
     this.timeRange = null; // [start,end] or null
     this.activeTypes = new Set(Object.keys(types));
     this.selectedId = null;
+    this.k = 1; // current zoom scale (semantic zoom: elements counter-scale by 1/k)
+    this.transform = window.d3.zoomIdentity; // current pan/zoom, for label placement
+    this._labelW = new Map(); // cached measured label widths (screen px)
 
     this.nodes = nodes;
     this.links = links.map((l) => ({ ...l }));
@@ -70,8 +73,18 @@ export class Graph {
 
     this.zoom = d3
       .zoom()
-      .scaleExtent([0.25, 6])
-      .on("zoom", (e) => this.root.attr("transform", e.transform));
+      .scaleExtent([0.4, 6])
+      .on("zoom", (e) => {
+        // Semantic zoom: the root scales so node *positions* fan apart, but the
+        // per-node counter-scale (see _tick) and non-scaling strokes keep dots,
+        // rings, labels, and edges a constant, readable size. Zooming in opens
+        // up crowded regions instead of magnifying the overlap.
+        this.k = e.transform.k;
+        this.transform = e.transform;
+        this.root.attr("transform", e.transform);
+        this._tick();
+        this._applyZoomDetail();
+      });
     svg.call(this.zoom);
     svg.on("dblclick.zoom", null);
     svg.on("click", (e) => {
@@ -174,10 +187,20 @@ export class Graph {
     this.nodeSel.select(".node-hit").attr("r", (d) => Math.max(this._settings().hitRadius, d.r + 8));
     this.nodeSel.select(".node-dot").attr("r", (d) => d.r).attr("fill", (d) => this._typeDef(d.type).color);
     this.nodeSel.select(".node-ring").attr("r", (d) => d.r + 4);
-    this.nodeSel
+    const labels = this.nodeSel
       .select(".node-label")
       .attr("dy", (d) => -d.r - 6)
       .text((d) => d.title);
+
+    // Cache each label's rendered width (screen px) for collision placement.
+    this._labelW = new Map();
+    labels.each((d, i, nodes) => {
+      let w;
+      try { w = nodes[i].getComputedTextLength(); } catch (_) { w = (d.title || "").length * 5.6; }
+      this._labelW.set(d.id, w || (d.title || "").length * 5.6);
+    });
+
+    this._applyZoomDetail();
   }
 
   _sim() {
@@ -206,7 +229,54 @@ export class Graph {
       .attr("y1", (d) => d.source.y)
       .attr("x2", (d) => d.target.x)
       .attr("y2", (d) => d.target.y);
-    this.nodeSel.attr("transform", (d) => `translate(${d.x},${d.y})`);
+    // Counter-scale each node by 1/k so its dot/ring/label render at a constant
+    // screen size while its position (in the root, scaled by k) fans apart.
+    const inv = 1 / (this.k || 1);
+    this.nodeSel.attr("transform", (d) => `translate(${d.x},${d.y}) scale(${inv})`);
+    this._maybeRelabel();
+  }
+
+  // Progressive disclosure via greedy label placement. Walking nodes from most
+  // to least important, a label is shown only if its box has room in screen
+  // space; the rest are dimmed. Because zoom spreads node *positions* apart
+  // (while label size is constant), zooming in frees space and more labels fade
+  // in — the disclosure is driven by the zoom itself.
+  _labelPriority(d) {
+    return d.id === "donald-judd" ? Infinity : d.deg;
+  }
+
+  _applyZoomDetail() {
+    if (!this.nodeSel) return;
+    const t = this.transform || window.d3.zoomIdentity;
+    const H = 14;          // label box height incl. leading (screen px)
+    const padX = 4, padY = 3;
+    const placed = [];
+    const show = new Set();
+    const ordered = this.nodes
+      .filter((d) => this._visible(d) && Number.isFinite(d.x) && Number.isFinite(d.y))
+      .sort((a, b) => this._labelPriority(b) - this._labelPriority(a));
+
+    for (const d of ordered) {
+      const sx = t.applyX(d.x);
+      const sy = t.applyY(d.y);
+      const w = (this._labelW.get(d.id) || 40) + padX * 2;
+      const y1 = sy - d.r - 6;      // label baseline sits d.r+6 px above center
+      const box = { x0: sx - w / 2, y0: y1 - H, x1: sx + w / 2, y1 };
+      let ok = true;
+      for (const p of placed) {
+        if (box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0) { ok = false; break; }
+      }
+      if (ok) { show.add(d.id); placed.push(box); }
+    }
+    this.nodeSel.classed("dim-label", (d) => !show.has(d.id));
+  }
+
+  // Re-run label placement as the layout settles, throttled so it doesn't churn.
+  _maybeRelabel() {
+    const now = (window.performance && performance.now) ? performance.now() : 0;
+    if (now - (this._lastRelabel || 0) < 140) return;
+    this._lastRelabel = now;
+    this._applyZoomDetail();
   }
 
   // ---- interaction state ------------------------------------------------
@@ -305,6 +375,7 @@ export class Graph {
     this.nodeSel.classed("hidden", (d) => !this._visible(d));
     const vis = new Set(this.nodes.filter((d) => this._visible(d)).map((d) => d.id));
     this.linkSel.classed("hidden", (d) => !(vis.has(this._id(d.source)) && vis.has(this._id(d.target))));
+    this._applyZoomDetail();
   }
 
   // ---- layouts ----------------------------------------------------------
