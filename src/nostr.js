@@ -41,6 +41,16 @@ export const RELAYS = [
   "wss://nostr.mom",
 ];
 
+// Profile lookups (kind 0) need indexer/aggregator relays, not the content
+// relays above — a user's metadata usually lives on their own relays. purplepag.es
+// and nostr.band aggregate kind-0 for essentially every npub. Content relays are
+// kept as a fallback in case the profile happens to be there too.
+export const PROFILE_RELAYS = [
+  "wss://purplepag.es",
+  "wss://relay.nostr.band",
+  ...RELAYS,
+];
+
 const VALID_TYPES = new Set(["person", "work", "place", "concept", "institution", "event"]);
 const MAX_TEXT = 4_000;
 const MAX_TAG = 160;
@@ -106,6 +116,24 @@ export function buildProposalEvent(node) {
       ["client", "specific-objects-atlas"],
     ],
   };
+}
+
+// NIP-09 deletion request. Lets an author withdraw their own event(s) — e.g. a
+// proposal they no longer want in the queue. Relays that honor NIP-09 drop the
+// referenced events, but only when the deletion is signed by the same pubkey
+// that authored them. Includes `k` (kind) and, for addressable events, the `a`
+// coordinate, as recommended by NIP-09.
+export function buildDeletionEvent(events, reason = "") {
+  const list = Array.isArray(events) ? events : [events];
+  const tags = [];
+  for (const ev of list) {
+    tags.push(["e", ev.id]);
+    if (ev.kind != null) tags.push(["k", String(ev.kind)]);
+    const d = ev.tags?.find((t) => t[0] === "d")?.[1];
+    if (d && ev.kind >= 30000 && ev.kind < 40000) tags.push(["a", `${ev.kind}:${ev.pubkey}:${d}`]);
+  }
+  tags.push(["client", "specific-objects-atlas"]);
+  return { kind: 5, created_at: Math.floor(Date.now() / 1000), tags, content: reason };
 }
 
 export function buildModerationEvent(proposal, action, note = "") {
@@ -330,10 +358,11 @@ export class AtlasClient {
     return events.filter(verifyEvent);
   }
 
-  async fetchProfile(pubkey, timeoutMs = 3000) {
+  async fetchProfile(pubkey, timeoutMs = 4500) {
     let events = [];
     try {
-      events = await this.pool.querySync(RELAYS, { kinds: [0], authors: [pubkey], limit: 1 }, { maxWait: timeoutMs });
+      // limit:1 per-relay would let one stale copy win; fetch a few and pick newest.
+      events = await this.pool.querySync(PROFILE_RELAYS, { kinds: [0], authors: [pubkey] }, { maxWait: timeoutMs });
     } catch {
       events = [];
     }

@@ -7,6 +7,7 @@ import {
   APPROVAL_THRESHOLD,
   ARCHIVIST_PUBKEYS,
   NODE_KIND,
+  buildDeletionEvent,
   buildModerationEvent,
   buildProposalEvent,
   createLocalIdentity,
@@ -586,15 +587,22 @@ function renderProposalQueue() {
         `${status} · ${approvalSummary(entry)} · ${safeNpubShort(entry.event.pubkey)}`
       )
     );
+    const actions = elem("div", "proposal-actions");
     if (isArchivist() && status === "pending") {
-      const actions = elem("div", "proposal-actions");
       const approve = elem("button", null, "Approve");
       const reject = elem("button", null, "Reject");
       approve.addEventListener("click", () => moderateProposal(entry, "approve"));
       reject.addEventListener("click", () => moderateProposal(entry, "reject"));
       actions.append(approve, reject);
-      li.append(actions);
     }
+    // The author can withdraw their own proposal (NIP-09) — used to clean up
+    // test/junk proposals. Relays only honor deletions from the signing pubkey.
+    if (currentIdentity && entry.event.pubkey === currentIdentity.pubkey) {
+      const withdraw = elem("button", "proposal-withdraw", "Withdraw");
+      withdraw.addEventListener("click", () => withdrawProposal(entry));
+      actions.append(withdraw);
+    }
+    if (actions.childNodes.length) li.append(actions);
     li.addEventListener("click", (e) => {
       if (e.target.tagName === "BUTTON") return;
       setPanelMode(uiState.isMobile ? "peek" : "open");
@@ -602,6 +610,21 @@ function renderProposalQueue() {
       if (uiState.isMobile) setRailOpen(false);
     });
     list.append(li);
+  }
+}
+
+async function withdrawProposal(entry) {
+  if (!currentIdentity || entry.event.pubkey !== currentIdentity.pubkey) return;
+  const label = entry.node.title || "this proposal";
+  if (!window.confirm(`Withdraw "${label}"? This publishes a deletion request to the relays.`)) return;
+  try {
+    const signed = await signWithIdentity(currentIdentity, buildDeletionEvent(entry.event, "Withdrawn by author."));
+    await client.publish(signed);
+    proposals.delete(entry.event.id);
+    if (graph.selectedId === entry.node.id) graph.select(null);
+    renderProposalQueue();
+  } catch (err) {
+    console.warn("Withdraw failed:", err);
   }
 }
 
