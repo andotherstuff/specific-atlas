@@ -250,6 +250,15 @@ export function profileFromEvent(ev) {
   }
 }
 
+// A contact list (kind 3, NIP-02) is the viewer's follow set: each `p` tag is a
+// followed pubkey. Used to decide whose pending/rejected proposals a viewer sees.
+export function contactsFromEvent(ev) {
+  if (!ev || ev.kind !== 3) return [];
+  return ev.tags
+    .filter((t) => t[0] === "p" && typeof t[1] === "string" && t[1].length === 64)
+    .map((t) => t[1]);
+}
+
 export function createLocalIdentity() {
   const secret = generateSecretKey();
   return {
@@ -403,6 +412,19 @@ export class AtlasClient {
     }
     const latest = events.filter(verifyEvent).sort((a, b) => b.created_at - a.created_at)[0];
     return latest ? profileFromEvent(latest) : null;
+  }
+
+  // The viewer's follow set (kind 3). Contact lists usually live on aggregator
+  // relays, so query PROFILE_RELAYS and take the newest. Returns a Set of pubkeys.
+  async fetchContacts(pubkey, timeoutMs = 4500) {
+    let events = [];
+    try {
+      events = await this.pool.querySync(PROFILE_RELAYS, { kinds: [3], authors: [pubkey] }, { maxWait: timeoutMs });
+    } catch {
+      events = [];
+    }
+    const latest = events.filter(verifyEvent).sort((a, b) => b.created_at - a.created_at)[0];
+    return new Set(latest ? contactsFromEvent(latest) : []);
   }
 
   subscribeLive(onNode, onProposal, onModeration) {

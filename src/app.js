@@ -421,6 +421,8 @@ function renderPanel(n) {
   const stateClass =
     n._state === "confirmed" || n._state === "accepted" || n._state === "curated"
       ? "prov-ok"
+      : n._state === "rejected"
+      ? "prov-down"
       : n._state === "proposed"
       ? "prov-live"
       : "prov-local";
@@ -431,6 +433,8 @@ function renderPanel(n) {
       ? "● Archivist-approved contribution"
       : n._state === "proposed"
       ? "● Pending archivist review"
+      : n._state === "rejected"
+      ? "● Not approved · visible to you & people who follow you"
       : n._state === "live"
       ? "● In the atlas"
       : "● Reference copy";
@@ -514,14 +518,6 @@ function proposalStatus(entry) {
   return "pending";
 }
 
-function applyAcceptedProposal(entry) {
-  if (proposalStatus(entry) !== "accepted") return;
-  entry.node._state = "accepted";
-  if (registerNode(entry.node, "accepted") && graph.selectedId === entry.node.id) {
-    renderPanel(entry.node);
-  }
-}
-
 function upsertProposal(ev) {
   const node = eventToNode(ev);
   if (!node) return null;
@@ -536,7 +532,8 @@ function upsertProposal(ev) {
     entry.event = ev;
     entry.node = node;
   }
-  applyAcceptedProposal(entry);
+  syncProposalNode(entry);
+  applyLayers();
   renderProposalQueue();
   return entry;
 }
@@ -553,7 +550,8 @@ function applyModerationEvent(ev) {
     entry.approvals.delete(vote.pubkey);
     entry.rejections.set(vote.pubkey, vote);
   }
-  applyAcceptedProposal(entry);
+  syncProposalNode(entry);
+  applyLayers();
   renderProposalQueue();
 }
 
@@ -638,6 +636,139 @@ async function moderateProposal(entry, action) {
     console.warn("Moderation failed:", err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Provenance layers — what the viewer sees in the graph.
+//
+//   canonical  the sealed Judd base + archive-confirmed nodes (everyone)
+//   approved   contributor proposals an archivist approved (everyone)
+//   mine        my own pending/rejected proposals (only me)
+//   following   pending/rejected proposals by people I follow (only my view)
+//
+// Visibility is client-side curation, not privacy: the events are public. A
+// pending/rejected proposal is shown iff the viewer authored it or follows the
+// author — computed from the viewer's own follow set, never by enumerating a
+// proposer's followers.
+// ---------------------------------------------------------------------------
+const LAYERS = [
+  { key: "canonical", label: "Canonical", auth: false },
+  { key: "approved", label: "Approved additions", auth: false },
+  { key: "mine", label: "My proposals", auth: true },
+  { key: "following", label: "People I follow", auth: true },
+];
+const activeLayers = new Set(["canonical", "approved"]);
+let currentFollows = new Set();
+
+function layerOfNode(n) {
+  return n._layer || "canonical";
+}
+
+function layerCounts() {
+  const c = {};
+  for (const n of NODES) {
+    const k = layerOfNode(n);
+    if (k === "hidden") continue;
+    c[k] = (c[k] || 0) + 1;
+  }
+  return c;
+}
+
+// Which layer a proposal belongs to for THIS viewer, or null if not shown.
+function classifyLayer(entry) {
+  if (proposalStatus(entry) === "accepted") return "approved";
+  const author = entry.event.pubkey;
+  if (currentIdentity && author === currentIdentity.pubkey) return "mine";
+  if (currentFollows.has(author)) return "following";
+  return null;
+}
+
+function stateForStatus(status) {
+  return status === "accepted" ? "accepted" : status === "rejected" ? "rejected" : "proposed";
+}
+
+// Reconcile one proposal with the graph: tag its layer/state, and add it to the
+// graph the first time it becomes visible to this viewer. Nodes already present
+// are updated in place (so approve/reject/sign-in reclassify without re-adding).
+function syncProposalNode(entry) {
+  const status = proposalStatus(entry);
+  const layer = classifyLayer(entry);
+  entry.node._state = stateForStatus(status);
+  entry.node._layer = layer || "hidden";
+  entry.node._fromProposal = true;
+  const existing = index.byId.get(entry.node.id);
+  if (existing && existing._fromProposal) {
+    existing._layer = entry.node._layer;
+    existing._state = entry.node._state;
+    if (graph.selectedId === existing.id) renderPanel(existing);
+  } else if (!existing && layer) {
+    registerNode(entry.node, entry.node._state);
+    if (graph.selectedId === entry.node.id) renderPanel(entry.node);
+  }
+}
+
+function syncAllProposals() {
+  for (const entry of proposals.values()) syncProposalNode(entry);
+  applyLayers();
+}
+
+function applyLayers() {
+  graph.setLayers(activeLayers);
+  renderLayerToggles();
+}
+
+function renderLayerToggles() {
+  const wrap = $("#layer-toggles");
+  if (!wrap) return;
+  wrap.replaceChildren();
+  const signedIn = !!currentIdentity;
+  const counts = layerCounts();
+  for (const l of LAYERS) {
+    const disabled = l.auth && !signedIn;
+    const on = activeLayers.has(l.key) && !disabled;
+    const li = elem("li", `layer-item${on ? " on" : ""}${disabled ? " disabled" : ""}`);
+    li.dataset.layer = l.key;
+    li.append(
+      elem("span", "layer-box"),
+      elem("span", "layer-label", l.label),
+      elem("span", "lg-count", disabled ? "—" : String(counts[l.key] || 0))
+    );
+    if (disabled) {
+      li.title = "Sign in to see these";
+    } else {
+      li.addEventListener("click", () => {
+        if (activeLayers.has(l.key)) activeLayers.delete(l.key);
+        else activeLayers.add(l.key);
+        applyLayers();
+      });
+    }
+    wrap.append(li);
+  }
+}
+
+// On sign-in: default the personal layers on and fetch the follow set, then
+// reclassify. On sign-out: drop personal layers and follows.
+async function onIdentityChanged() {
+  if (currentIdentity) {
+    activeLayers.add("mine");
+    activeLayers.add("following");
+  } else {
+    activeLayers.delete("mine");
+    activeLayers.delete("following");
+    currentFollows = new Set();
+  }
+  syncAllProposals();
+  if (currentIdentity) {
+    const who = currentIdentity.pubkey;
+    const follows = await client.fetchContacts(who);
+    if (currentIdentity && currentIdentity.pubkey === who) {
+      currentFollows = follows;
+      syncAllProposals();
+    }
+  }
+}
+
+renderLayerToggles();
+graph.setLayers(activeLayers);
 
 (async function boot() {
   try {
@@ -812,6 +943,7 @@ $("#id-ext").addEventListener("click", async () => {
     idCreated.hidden = true;
     idCreated.textContent = "";
     await refreshProfile();
+    onIdentityChanged();
   } catch (err) {
     idStatus.textContent = err.message;
   } finally {
@@ -825,6 +957,7 @@ $("#id-new").addEventListener("click", () => {
   idCreated.hidden = false;
   idCreated.textContent = `New account created. Save this key now; it is not stored by the app: ${currentIdentity.nsec}`;
   refreshProfile();
+  onIdentityChanged();
 });
 
 $("#id-import").addEventListener("click", () => {
@@ -835,6 +968,7 @@ $("#id-import").addEventListener("click", () => {
     idCreated.hidden = true;
     idCreated.textContent = "";
     refreshProfile();
+    onIdentityChanged();
   } catch (err) {
     idStatus.textContent = err.message;
   }
@@ -847,6 +981,7 @@ $("#id-logout").addEventListener("click", () => {
   idCreated.hidden = true;
   idCreated.textContent = "";
   renderIdentity();
+  onIdentityChanged();
 });
 
 $("#m-publish").addEventListener("click", async () => {

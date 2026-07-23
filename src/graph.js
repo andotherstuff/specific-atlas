@@ -10,6 +10,7 @@ export class Graph {
     this.viewportMode = "desktop";
     this.timeRange = null; // [start,end] or null
     this.activeTypes = new Set(Object.keys(types));
+    this.activeLayers = null; // Set of provenance layers, or null = show all
     this.selectedId = null;
     this.k = 1; // current zoom scale (semantic zoom: elements counter-scale by 1/k)
     this.transform = window.d3.zoomIdentity; // current pan/zoom, for label placement
@@ -358,6 +359,19 @@ export class Graph {
     this._applyVisibility();
   }
 
+  // Provenance layers: canonical / approved / mine / following (see app.js).
+  // A node's layer lives on d._layer; null activeLayers means no layer filtering.
+  setLayers(activeSet) {
+    this.activeLayers = activeSet ? new Set(activeSet) : null;
+    this._applyVisibility();
+  }
+
+  _inLayers(d) {
+    if (!this.activeLayers) return true;
+    const layer = d._layer || "canonical";
+    return this.activeLayers.has(layer);
+  }
+
   _inTime(d) {
     if (!this.timeRange) return true;
     const [a, b] = this.timeRange;
@@ -368,7 +382,7 @@ export class Graph {
   }
 
   _visible(d) {
-    return this.activeTypes.has(d.type) && this._inTime(d);
+    return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d);
   }
 
   _applyVisibility() {
