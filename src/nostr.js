@@ -11,17 +11,33 @@ import {
 } from "https://esm.sh/nostr-tools@2.10.4";
 
 // ---------------------------------------------------------------------------
-// Identity. Only public keys live here. Rotate ARCHIVE_NPUB before publishing if
-// a previous archive secret ever existed in client-side code.
+// Identity. Only public keys live here — never an nsec or other private key.
+//
+// Two distinct roles, deliberately NOT the same key:
+//
+//   JUDD (foundational key) — authors the canonical seed nodes (kind 31987).
+//   Once seeding is complete this key is BURNED: the seed becomes a frozen,
+//   tamper-evident base layer that no one can ever alter or extend. Because it
+//   can never rotate, the burned key doubles as the permanent *namespace* for
+//   the atlas — every proposal tags `proposal-for: FOUNDATION_PK` to say "this
+//   belongs to the Judd atlas." That is an identifier, not a signer, so burning
+//   the key does not orphan anything.
+//
+//   ARCHIVIST(S) — a SEPARATE authority that reviews proposals and signs
+//   approve/reject moderation votes (kind 31989). Rotatable and threshold-based;
+//   lives entirely in ARCHIVIST_PUBKEYS below. Approval never re-signs the node
+//   (Judd is burned) — it is a vote that promotes the contributor's own event
+//   into the canonical graph, PR-of-provenance style.
 // ---------------------------------------------------------------------------
-export const ARCHIVE_NPUB =
+export const JUDD_NPUB =
   "npub1wm4ez7ludz9cfatn84gxrnmsaxjf9kz04xrysmelqyulgzv7ws4skl6f8m";
-export const ARCHIVE_PK = nip19.decode(ARCHIVE_NPUB).data;
+export const FOUNDATION_PK = nip19.decode(JUDD_NPUB).data;
 
-// Add rotated archivist npubs here. Approval is threshold-based and signed by
-// these identities; do not add nsecs or other private keys.
+// The archivist authority — distinct from Judd. Add rotated/additional archivist
+// npubs here; approval is threshold-based and signed by these identities. Do not
+// add nsecs. (Interim key; will move to keycast/NIP-46 remote signing later.)
 export const ARCHIVIST_NPUBS = [
-  "npub1wm4ez7ludz9cfatn84gxrnmsaxjf9kz04xrysmelqyulgzv7ws4skl6f8m",
+  "npub1rc25lfm5h68865u0n7wsn2tam60vnyjzu7cxxls0we9jxqq5qunqvdx7ly",
 ];
 export const ARCHIVIST_PUBKEYS = ARCHIVIST_NPUBS.map((npub) => nip19.decode(npub).data);
 export const APPROVAL_THRESHOLD = 1;
@@ -112,7 +128,7 @@ export function buildProposalEvent(node) {
     created_at: Math.floor(Date.now() / 1000),
     tags: [
       ...buildNodeEvent(node).tags.filter((tag) => tag[0] !== "client"),
-      ["proposal-for", ARCHIVE_PK],
+      ["proposal-for", FOUNDATION_PK],
       ["client", "specific-objects-atlas"],
     ],
   };
@@ -143,7 +159,7 @@ export function buildModerationEvent(proposal, action, note = "") {
     tags: [
       ["e", proposal.id],
       ["p", proposal.pubkey],
-      ["proposal-for", ARCHIVE_PK],
+      ["proposal-for", FOUNDATION_PK],
       ["action", action],
       ["client", "specific-objects-atlas"],
     ],
@@ -184,7 +200,7 @@ export function moderationFromEvent(ev) {
   const proposalId = ev.tags.find((t) => t[0] === "e")?.[1];
   const action = ev.tags.find((t) => t[0] === "action")?.[1];
   const forArchive = ev.tags.find((t) => t[0] === "proposal-for")?.[1];
-  if (!proposalId || forArchive !== ARCHIVE_PK || !["approve", "reject"].includes(action)) return null;
+  if (!proposalId || forArchive !== FOUNDATION_PK || !["approve", "reject"].includes(action)) return null;
   if (!ARCHIVIST_PUBKEYS.includes(ev.pubkey)) return null;
   return {
     proposalId,
@@ -255,9 +271,28 @@ export function identityFromNsec(nsec) {
   };
 }
 
+// Browser signer extensions (NIP-07) inject window.nostr asynchronously, often a
+// beat after the page is interactive. Poll briefly so the first click connects
+// instead of erroring and forcing the user to click again.
+function waitForSigner(timeoutMs = 2000) {
+  if (window.nostr) return Promise.resolve(window.nostr);
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (window.nostr) return resolve(window.nostr);
+      if (Date.now() - start > timeoutMs) return resolve(null);
+      setTimeout(check, 100);
+    };
+    check();
+  });
+}
+
 export async function getExtensionIdentity() {
-  if (!window.nostr) throw new Error("No Nostr extension (NIP-07) found.");
-  return { type: "extension", pubkey: await window.nostr.getPublicKey() };
+  const signer = await waitForSigner();
+  if (!signer) {
+    throw new Error("No browser signer found. Install a signer extension, or use another sign-in method.");
+  }
+  return { type: "extension", pubkey: await signer.getPublicKey() };
 }
 
 export async function signWithIdentity(identity, template) {
@@ -315,7 +350,7 @@ export class AtlasClient {
 
   // Read every canonical atlas node the archive key has published.
   async fetchArchive(timeoutMs = 4500) {
-    const filter = { kinds: [NODE_KIND], authors: [ARCHIVE_PK], limit: 500 };
+    const filter = { kinds: [NODE_KIND], authors: [FOUNDATION_PK], limit: 500 };
     let events = [];
     try {
       events = await this.pool.querySync(RELAYS, filter, { maxWait: timeoutMs });
@@ -344,7 +379,7 @@ export class AtlasClient {
     } catch {
       events = [];
     }
-    return events.filter((ev) => verifyEvent(ev) && ev.tags.some((t) => t[0] === "proposal-for" && t[1] === ARCHIVE_PK));
+    return events.filter((ev) => verifyEvent(ev) && ev.tags.some((t) => t[0] === "proposal-for" && t[1] === FOUNDATION_PK));
   }
 
   async fetchModeration(timeoutMs = 4500) {
@@ -378,14 +413,14 @@ export class AtlasClient {
       onevent: (ev) => {
         if (!verifyEvent(ev)) return;
         if (ev.kind === PROPOSAL_KIND) {
-          if (ev.tags.some((t) => t[0] === "proposal-for" && t[1] === ARCHIVE_PK)) onProposal?.(ev);
+          if (ev.tags.some((t) => t[0] === "proposal-for" && t[1] === FOUNDATION_PK)) onProposal?.(ev);
           return;
         }
         if (ev.kind === MODERATION_KIND) {
           onModeration?.(ev);
           return;
         }
-        if (ev.pubkey !== ARCHIVE_PK) return;
+        if (ev.pubkey !== FOUNDATION_PK) return;
         const node = eventToNode(ev);
         if (!node) return;
         onNode(node);

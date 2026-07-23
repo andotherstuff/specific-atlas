@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <title>SPECIFIC ATLAS—A Nostr Atlas of Donald Judd</title>
+  <title>SPECIFIC ATLAS—An Atlas of Donald Judd</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='8' y='7' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='14' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='21' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://esm.sh" />
   <link rel="stylesheet" href="./styles.css" />
@@ -16,8 +16,18 @@
     <aside id="rail">
       <header id="brand">
         <h1>SPECIFIC<br />ATLAS</h1>
-        <p class="sub">A Nostr atlas of Donald Judd<br /><span>1928 – 1994</span></p>
+        <p class="sub">An atlas of Donald Judd<br /><span>1928 – 1994</span></p>
       </header>
+
+      <section class="facet" id="account-wrap">
+        <button id="account-state" class="account-state" type="button">
+          <span id="account-avatar" class="account-avatar"><span id="account-dot" class="dot"></span></span>
+          <span class="account-copy">
+            <span id="account-label">Sign in</span>
+            <span id="account-sub">propose &amp; review</span>
+          </span>
+        </button>
+      </section>
 
       <section class="facet">
         <h2>Lens</h2>
@@ -30,17 +40,6 @@
       <section class="facet">
         <h2>Concepts <span class="hint">node kinds</span></h2>
         <ul id="type-filters" class="legend"></ul>
-      </section>
-
-      <section class="facet" id="account-wrap">
-        <h2>Account</h2>
-        <button id="account-state" class="account-state" type="button">
-          <span id="account-avatar" class="account-avatar"><span id="account-dot" class="dot"></span></span>
-          <span class="account-copy">
-            <span id="account-label">Not signed in</span>
-            <span id="account-sub">Nostr identity</span>
-          </span>
-        </button>
       </section>
 
       <section class="facet">
@@ -91,7 +90,7 @@
       <div id="panel-empty">
         <h3>The thing as a whole</h3>
         <p>Donald Judd refused illusion. A work was not a picture <em>of</em> something—it was a specific object, a real thing in real space.</p>
-        <p>This atlas treats his life the same way: people, works, places, and ideas as discrete objects, each one a signed event living on the Nostr network. Pull a node to read it; follow its edges to travel time, geography, and thought.</p>
+        <p>This atlas treats his life the same way: people, works, places, and ideas as discrete objects, each one a signed record you can trace to whoever added it. Pull a node to read it; follow its edges to travel time, geography, and thought.</p>
         <p class="cue">↖ Select any node to begin.</p>
       </div>
       <div id="panel-body" hidden></div>
@@ -99,24 +98,25 @@
   </div>
   <div id="rail-scrim" hidden></div>
   <button id="mobile-menu" class="mobile-pill mobile-menu" type="button" aria-label="Open navigation">Menu</button>
+  <button id="mobile-account" class="mobile-pill mobile-account" type="button" aria-label="Account">Sign in</button>
   <button id="mobile-add" class="mobile-fab" type="button" aria-label="Propose a node">＋</button>
   <button id="panel-open" class="panel-open" type="button" hidden>Details</button>
 
-  <!-- relay / status ribbon -->
+  <!-- network / status ribbon -->
   <div id="status-ribbon">
     <span id="relay-dot" class="dot"></span>
-    <span id="status-text">connecting to relays…</span>
-    <button id="relay-detail" class="link">relays</button>
+    <span id="status-text">connecting…</span>
+    <button id="relay-detail" class="link">network</button>
   </div>
 
-  <!-- relay popover -->
+  <!-- network popover -->
   <div id="relay-pop" hidden></div>
 
   <!-- add-node modal -->
   <div id="modal-scrim" hidden>
     <div id="modal">
       <h3>Propose a node</h3>
-      <p class="modal-sub">Your proposal is attributed to your signed-in Nostr identity and only joins the atlas after archivist approval.</p>
+      <p class="modal-sub">Your proposal is attributed to your signed-in account and only joins the atlas after archivist approval.</p>
       <p id="proposal-account" class="modal-status"></p>
       <label>Title<input id="m-title" type="text" placeholder="e.g. Bernstein Brothers" /></label>
       <label>Kind
@@ -139,21 +139,23 @@
   <div id="account-scrim" hidden>
     <div id="account-modal">
       <h3>Account</h3>
-      <p class="modal-sub">Sign in with a Nostr identity. Private keys are used only for this browser session and are not stored by the app.</p>
+      <p class="modal-sub">Sign in to propose nodes. Your key is used only for this browser session and is never stored by the app.</p>
       <div id="account-card" class="account-card">
         <span id="account-modal-avatar" class="account-avatar large"><span class="dot warn"></span></span>
         <span>
           <span id="account-modal-name" class="account-name">Not signed in</span>
-          <span id="account-modal-sub" class="account-detail">Use a Nostr identity to propose nodes.</span>
+          <span id="account-modal-sub" class="account-detail">Sign in to propose nodes.</span>
         </span>
       </div>
+      <button id="id-divine" type="button" class="block primary" disabled>Sign in with Divine <span class="soon">soon</span></button>
+      <div class="id-alt">Or sign in another way</div>
       <div id="identity-box">
         <div class="id-row">
-          <button id="id-ext" type="button" class="ghost">Use extension</button>
-          <button id="id-new" type="button" class="ghost">Create identity</button>
+          <button id="id-ext" type="button" class="ghost">Browser extension</button>
+          <button id="id-new" type="button" class="ghost">Create new account</button>
         </div>
-        <label>Import nsec<input id="id-nsec" type="password" placeholder="nsec…" autocomplete="off" /></label>
-        <button id="id-import" type="button" class="ghost block">Use imported key for this session</button>
+        <label>Import a key<input id="id-nsec" type="password" placeholder="nsec…" autocomplete="off" /></label>
+        <button id="id-import" type="button" class="ghost block">Use this key for this session</button>
         <p id="id-status" class="modal-status"></p>
         <p id="id-created" class="secret-out" hidden></p>
       </div>

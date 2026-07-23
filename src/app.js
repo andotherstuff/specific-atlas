@@ -2,8 +2,8 @@ import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data
 import { Graph } from "./graph.js";
 import {
   AtlasClient,
-  ARCHIVE_PK,
-  ARCHIVE_NPUB,
+  FOUNDATION_PK,
+  JUDD_NPUB,
   APPROVAL_THRESHOLD,
   ARCHIVIST_PUBKEYS,
   NODE_KIND,
@@ -46,7 +46,7 @@ function dotSpan(className, color) {
 
 function setNodeState(node, state, event = node._event) {
   node._event = event;
-  node._author = event?.pubkey || node._author || ARCHIVE_PK;
+  node._author = event?.pubkey || node._author || FOUNDATION_PK;
   node._state = state;
 }
 
@@ -64,7 +64,7 @@ function safeNpubShort(author) {
 // ---------------------------------------------------------------------------
 const index = buildIndex(NODES);
 NODES.forEach((node) => {
-  node._author = ARCHIVE_PK;
+  node._author = FOUNDATION_PK;
   node._state = "curated";
 });
 
@@ -372,8 +372,8 @@ function renderPanel(n) {
   }
   const ev = n._event;
   const nevent = ev ? neventFor(ev) : null;
-  const author = n._author || (ev && ev.pubkey) || ARCHIVE_PK;
-  const isArchive = author === ARCHIVE_PK;
+  const author = n._author || (ev && ev.pubkey) || FOUNDATION_PK;
+  const isArchive = author === FOUNDATION_PK;
   body.replaceChildren();
 
   const type = elem("div", "p-type", def.label);
@@ -426,26 +426,25 @@ function renderPanel(n) {
       : "prov-local";
   const stateText =
     n._state === "confirmed"
-      ? "● archive-signed on relays"
+      ? "● Sealed base · Judd"
       : n._state === "accepted"
-      ? "● archivist-approved contribution"
+      ? "● Archivist-approved contribution"
       : n._state === "proposed"
-      ? "● pending archivist review"
+      ? "● Pending archivist review"
       : n._state === "live"
-      ? "● received live"
-      : "● curated local fallback";
+      ? "● In the atlas"
+      : "● Reference copy";
   state.append(elem("span", stateClass, stateText));
   const dl = document.createElement("dl");
   function addDef(term, value, className) {
     dl.append(elem("dt", null, term), elem("dd", className, value));
   }
-  addDef("kind", `${NODE_KIND} · addressable`);
-  addDef("d-tag", n.id, "mono");
-  addDef("author", `${isArchive ? "Judd Atlas" : "contributor"} · ${safeNpubShort(author)}`, "mono");
-  if (ev) addDef("event", `${ev.id.slice(0, 16)}…`, "mono");
+  addDef("added by", `${isArchive ? "Judd Atlas" : "contributor"} · ${safeNpubShort(author)}`, "mono");
+  addDef("identifier", n.id, "mono");
+  if (ev) addDef("fingerprint", `${ev.id.slice(0, 16)}…`, "mono");
   prov.append(state, dl);
   if (nevent) {
-    const link = elem("a", "prov-link", "inspect event on njump ↗");
+    const link = elem("a", "prov-link", "inspect the signed record ↗");
     link.href = `https://njump.me/${nevent}`;
     link.target = "_blank";
     link.rel = "noopener";
@@ -467,16 +466,14 @@ function renderStatus(s) {
   dot.className = "dot " + (s.connected > 0 ? "ok" : s.connected === 0 ? "warn" : "warn");
   statusText.replaceChildren(
     elem("b", null, `${s.connected}/${s.total}`),
-    document.createTextNode(" relays · "),
+    document.createTextNode(" connected · "),
     elem("b", null, String(s.received)),
-    document.createTextNode(" nodes · "),
-    elem("b", null, String(s.published)),
-    document.createTextNode(" events sent")
+    document.createTextNode(" nodes")
   );
   if (!relayPop.hidden) renderRelayPop(s);
 }
 function renderRelayPop(s) {
-  relayPop.replaceChildren(elem("div", "rp-head", "Archive identity"), elem("div", "rp-npub mono", ARCHIVE_NPUB), elem("div", "rp-head", "Relays"));
+  relayPop.replaceChildren(elem("div", "rp-head", "Foundational key · Judd"), elem("div", "rp-npub mono", JUDD_NPUB), elem("div", "rp-head", "Network"));
   for (const [url, st] of Object.entries(s.relays)) {
     const row = elem("div", "rp-relay");
     row.append(elem("span", `dot ${st === "ok" ? "ok" : st === "connecting" ? "warn" : "down"}`), document.createTextNode(url.replace("wss://", "")));
@@ -645,7 +642,7 @@ async function moderateProposal(entry, action) {
 (async function boot() {
   try {
     await client.connect();
-    statusText.textContent = "reading archive from relays…";
+    statusText.textContent = "loading the atlas…";
     const existing = await client.fetchArchive();
     // mark confirmed nodes
     for (const ev of existing) {
@@ -693,6 +690,7 @@ const accountAvatar = $("#account-avatar");
 const accountModalAvatar = $("#account-modal-avatar");
 const accountModalName = $("#account-modal-name");
 const accountModalSub = $("#account-modal-sub");
+const mobileAccount = $("#mobile-account");
 const proposalAccount = $("#proposal-account");
 TYPE_ORDER.forEach((t) => {
   const o = document.createElement("option");
@@ -732,13 +730,14 @@ accountScrim.addEventListener("click", (e) => {
 
 function renderIdentity() {
   if (!currentIdentity) {
-    idStatus.textContent = `Not signed in. ${ARCHIVIST_PUBKEYS.length} archivist key(s), threshold ${APPROVAL_THRESHOLD}.`;
+    idStatus.textContent = "Not signed in.";
     renderAvatar(accountAvatar, "", "warn");
     renderAvatar(accountModalAvatar, "", "warn");
-    accountLabel.textContent = "Not signed in";
-    accountSub.textContent = "Nostr identity";
+    accountLabel.textContent = "Sign in";
+    accountSub.textContent = "propose & review";
     accountModalName.textContent = "Not signed in";
-    accountModalSub.textContent = "Use a Nostr identity to propose nodes.";
+    accountModalSub.textContent = "Sign in to propose nodes.";
+    mobileAccount.textContent = "Sign in";
     renderProposalAccount();
     renderProposalQueue();
     return;
@@ -751,6 +750,7 @@ function renderIdentity() {
   renderAvatar(accountModalAvatar, currentProfile?.picture, isArchivist() ? "ok" : "warn");
   accountLabel.textContent = name;
   accountSub.textContent = detail;
+  mobileAccount.textContent = name;
   accountModalName.textContent = name;
   accountModalSub.textContent = detail;
   renderProposalAccount();
@@ -797,7 +797,15 @@ $("#account-state").addEventListener("click", () => {
   accountScrim.hidden = false;
 });
 
+mobileAccount.addEventListener("click", () => {
+  renderIdentity();
+  accountScrim.hidden = false;
+});
+
 $("#id-ext").addEventListener("click", async () => {
+  const btn = $("#id-ext");
+  btn.disabled = true;
+  idStatus.textContent = "Connecting…";
   try {
     currentIdentity = await getExtensionIdentity();
     currentProfile = null;
@@ -806,6 +814,8 @@ $("#id-ext").addEventListener("click", async () => {
     await refreshProfile();
   } catch (err) {
     idStatus.textContent = err.message;
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -813,7 +823,7 @@ $("#id-new").addEventListener("click", () => {
   currentIdentity = createLocalIdentity();
   currentProfile = null;
   idCreated.hidden = false;
-  idCreated.textContent = `New identity created. Save this private key now; it is not stored by the app: ${currentIdentity.nsec}`;
+  idCreated.textContent = `New account created. Save this key now; it is not stored by the app: ${currentIdentity.nsec}`;
   refreshProfile();
 });
 
@@ -874,11 +884,11 @@ $("#m-publish").addEventListener("click", async () => {
   $("#m-status").textContent = "signing proposal…";
   try {
     const signed = await signWithIdentity(currentIdentity, template);
-    $("#m-status").textContent = "broadcasting proposal to relays…";
+    $("#m-status").textContent = "submitting proposal…";
     const res = await client.publish(signed);
     upsertProposal(signed);
     $("#m-status").textContent =
-      res.ok > 0 ? `proposal sent to ${res.ok}/${res.total} relays` : "proposal signed locally (relays unreachable)";
+      res.ok > 0 ? "proposal submitted for archivist review" : "couldn't reach the network — proposal not submitted";
     setTimeout(() => {
       scrim.hidden = true;
     }, 850);

@@ -248,6 +248,22 @@ body {
   letter-spacing: 0.01em; transition: background 0.12s, color 0.12s;
 }
 .ghost:hover { background: var(--ink); color: var(--bg); }
+.primary {
+  background: var(--ink); border: 1px solid var(--ink); color: var(--bg);
+  padding: 12px; cursor: pointer; font-size: 13px; font-family: var(--sans);
+  letter-spacing: 0.01em; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: opacity 0.12s;
+}
+.primary:hover:not(:disabled) { opacity: 0.85; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.soon {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+  border: 1px solid currentColor; padding: 1px 5px;
+}
+.id-alt {
+  text-align: center; font-size: 11px; color: var(--ink-faint);
+  margin: 16px 0 12px; letter-spacing: 0.04em;
+}
 .micro { font-size: 11px; color: var(--ink-faint); line-height: 1.6; margin: 14px 0 0; }
 
 /* ---------------- CENTER STAGE ---------------- */
@@ -528,7 +544,7 @@ body {
   #stage-overlay {
     top: calc(12px + env(safe-area-inset-top));
     left: calc(82px + env(safe-area-inset-left));
-    right: 12px;
+    right: calc(100px + env(safe-area-inset-right));
     width: auto;
     transform: none;
   }
@@ -556,6 +572,18 @@ body {
     top: calc(12px + env(safe-area-inset-top));
     left: calc(12px + env(safe-area-inset-left));
   }
+  .mobile-account {
+    top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+    font-weight: 600;
+  }
   .mobile-fab {
     display: flex;
     position: fixed;
@@ -574,7 +602,10 @@ body {
   }
   #app.rail-open ~ .mobile-fab,
   #app.panel-peek ~ .mobile-fab,
-  #app.panel-expanded ~ .mobile-fab {
+  #app.panel-expanded ~ .mobile-fab,
+  #app.rail-open ~ .mobile-account,
+  #app.panel-peek ~ .mobile-account,
+  #app.panel-expanded ~ .mobile-account {
     display: none;
   }
 
