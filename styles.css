@@ -307,12 +307,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .sr-title { flex: 1; font-size: 13px; }
 .sr-type { font-size: 11px; color: var(--ink-faint); }
 
-#geo-caption {
-  position: absolute; bottom: 54px; left: 50%; transform: translateX(-50%);
-  font-size: 11px; color: var(--ink-faint); letter-spacing: 0.04em;
-  background: var(--surface); padding: 6px 14px; border: 1px solid var(--line);
-}
-
 /* graph elements — vector-effect keeps edges hairline at any zoom (semantic zoom) */
 .link { stroke: var(--edge); stroke-width: 1; stroke-opacity: 0.18; vector-effect: non-scaling-stroke; }
 .link.active { stroke: var(--accent-ink); stroke-opacity: 0.9; stroke-width: 1.4; }
@@ -736,12 +730,6 @@ body.reviewing .mobile-fab { display: none; }
   .p-title { font-size: 25px; padding-right: 40px; }
   .p-content { font-size: 13.5px; line-height: 1.65; }
   .p-edges li { min-height: 44px; align-items: center; }
-
-  #geo-caption {
-    bottom: calc(48px + env(safe-area-inset-bottom));
-    max-width: calc(100vw - 28px);
-    text-align: center;
-  }
 
   #modal-scrim,
   #account-scrim {

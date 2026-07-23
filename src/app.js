@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=8";
-import { Graph } from "./graph.js?v=8";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=9";
+import { Graph } from "./graph.js?v=9";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=8";
+} from "./nostr.js?v=9";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -178,7 +178,6 @@ $$("#layout-toggle button").forEach((b) =>
     b.classList.add("on");
     const mode = b.dataset.layout;
     graph.setLayout(mode);
-    $("#geo-caption").hidden = mode !== "geo";
     $("#geo-list-wrap").hidden = mode !== "geo";
     if (uiState.isMobile) setRailOpen(false);
   })
