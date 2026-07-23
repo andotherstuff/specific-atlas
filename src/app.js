@@ -1,9 +1,8 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=3";
-import { Graph } from "./graph.js?v=3";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=4";
+import { Graph } from "./graph.js?v=4";
 import {
   AtlasClient,
   FOUNDATION_PK,
-  JUDD_NPUB,
   APPROVAL_THRESHOLD,
   ARCHIVIST_PUBKEYS,
   NODE_KIND,
@@ -23,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=3";
+} from "./nostr.js?v=4";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -463,41 +462,11 @@ function renderPanel(n) {
 }
 
 // ---------------------------------------------------------------------------
-// Status ribbon + relay popover
+// Lifecycle: connect → read → seed missing → live subscribe.
+// Relay/network status is deliberately not surfaced to viewers — the protocol
+// is not the point. The client still tracks it internally for its own use.
 // ---------------------------------------------------------------------------
-const dot = $("#relay-dot");
-const statusText = $("#status-text");
-const relayPop = $("#relay-pop");
-let lastStatus = null;
-
-function renderStatus(s) {
-  lastStatus = s;
-  dot.className = "dot " + (s.connected > 0 ? "ok" : s.connected === 0 ? "warn" : "warn");
-  statusText.replaceChildren(
-    elem("b", null, `${s.connected}/${s.total}`),
-    document.createTextNode(" connected · "),
-    elem("b", null, String(s.received)),
-    document.createTextNode(" nodes")
-  );
-  if (!relayPop.hidden) renderRelayPop(s);
-}
-function renderRelayPop(s) {
-  relayPop.replaceChildren(elem("div", "rp-head", "Foundational key · Judd"), elem("div", "rp-npub mono", JUDD_NPUB), elem("div", "rp-head", "Network"));
-  for (const [url, st] of Object.entries(s.relays)) {
-    const row = elem("div", "rp-relay");
-    row.append(elem("span", `dot ${st === "ok" ? "ok" : st === "connecting" ? "warn" : "down"}`), document.createTextNode(url.replace("wss://", "")));
-    relayPop.append(row);
-  }
-}
-$("#relay-detail").addEventListener("click", () => {
-  relayPop.hidden = !relayPop.hidden;
-  if (!relayPop.hidden && lastStatus) renderRelayPop(lastStatus);
-});
-
-// ---------------------------------------------------------------------------
-// Nostr lifecycle: connect → read → seed missing → live subscribe
-// ---------------------------------------------------------------------------
-const client = new AtlasClient(renderStatus);
+const client = new AtlasClient();
 const proposals = new Map();
 let currentIdentity = null;
 let currentProfile = null;
@@ -1183,7 +1152,6 @@ graph.setLayers(activeLayers);
 (async function boot() {
   try {
     await client.connect();
-    statusText.textContent = "loading the atlas…";
     const existing = await client.fetchArchive();
     existing.map(eventToNode).filter(Boolean).forEach(registerArchiveNode);
     if (graph.selectedId) renderPanel(index.byId.get(graph.selectedId));
@@ -1193,7 +1161,6 @@ graph.setLayers(activeLayers);
     const moderationEvents = await client.fetchModeration();
     moderationEvents.forEach(applyModerationEvent);
     client.countReceived(NODES.length);
-    renderStatus(client.status());
 
     client.subscribeLive(
       (node) => registerArchiveNode(node),
@@ -1201,8 +1168,6 @@ graph.setLayers(activeLayers);
       (ev) => applyModerationEvent(ev)
     );
   } catch (err) {
-    statusText.textContent = "offline · atlas running locally";
-    dot.className = "dot warn";
     console.warn("Nostr boot issue:", err);
   }
 })();

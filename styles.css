@@ -431,40 +431,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .prov-link { color: var(--accent-ink); font-size: 12px; text-decoration: none; border-bottom: 1px solid var(--accent); }
 .prov-link:hover { border-color: var(--accent-ink); }
 
-/* ---------------- STATUS RIBBON ---------------- */
-#status-ribbon {
-  position: fixed; bottom: 0; left: 0; right: 0; height: 34px;
-  display: flex; align-items: center; gap: 10px; padding: 0 18px;
-  padding-bottom: env(safe-area-inset-bottom);
-  background: var(--surface); border-top: 1px solid var(--line);
-  font-size: 12px; color: var(--ink-dim); z-index: 30;
-}
-#status-ribbon b { color: var(--ink); font-weight: 600; }
+/* ---------------- STATUS DOTS ---------------- */
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); flex: none; }
 .dot.ok { background: var(--ok); }
 .dot.warn { background: var(--accent-ink); animation: pulse 1.4s infinite; }
 .dot.down { background: var(--down); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-#relay-detail.link {
-  margin-left: auto; background: none; border: none; color: var(--ink-faint);
-  cursor: pointer; font-size: 12px; text-decoration: underline; text-underline-offset: 2px;
-}
-#relay-detail.link:hover { color: var(--ink); }
-
-#relay-pop {
-  position: fixed; bottom: 42px; right: 14px; width: 320px; z-index: 40;
-  background: var(--surface); border: 1px solid var(--border-strong);
-  padding: 16px 18px; box-shadow: 0 12px 40px -20px var(--shadow); font-size: 12px;
-}
 
 .mobile-pill,
 .mobile-fab {
   display: none;
 }
-.rp-head { text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; color: var(--ink-faint); margin: 10px 0 7px; font-weight: 700; }
-.rp-head:first-child { margin-top: 0; }
-.rp-npub { color: var(--ink-dim); font-size: 11px; }
-.rp-relay { display: flex; align-items: center; gap: 9px; padding: 4px 0; color: var(--ink-dim); }
 
 /* ---------------- MODAL ---------------- */
 #modal-scrim, #account-scrim {
@@ -513,7 +490,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 #review-scrim {
   position: fixed; inset: 0; z-index: 60; overflow-y: auto; background: var(--bg);
 }
-body.reviewing #status-ribbon,
 body.reviewing .mobile-pill,
 body.reviewing .mobile-fab { display: none; }
 #review-modal {
@@ -752,25 +728,6 @@ body.reviewing .mobile-fab { display: none; }
     bottom: calc(48px + env(safe-area-inset-bottom));
     max-width: calc(100vw - 28px);
     text-align: center;
-  }
-
-  #status-ribbon {
-    height: 36px;
-    padding: 0 calc(12px + env(safe-area-inset-right)) env(safe-area-inset-bottom) calc(12px + env(safe-area-inset-left));
-    font-size: 11px;
-    gap: 7px;
-  }
-  #status-text {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  #relay-detail.link { flex: none; }
-  #relay-pop {
-    left: 12px;
-    right: 12px;
-    bottom: calc(46px + env(safe-area-inset-bottom));
-    width: auto;
   }
 
   #modal-scrim,
