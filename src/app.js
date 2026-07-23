@@ -572,11 +572,22 @@ function renderProposalQueue() {
   const count = $("#proposal-count");
   if (!list || !count) return;
   list.replaceChildren();
-  const entries = [...proposals.values()].sort((a, b) => b.event.created_at - a.event.created_at);
+  // A proposal is visible in the sidebar ONLY to its author and that author's
+  // followers — the same rule as the graph. Everyone else (signed-out visitors,
+  // and the archivist browsing the rail) sees nothing here; the archivist works
+  // the full backlog from the dedicated review queue instead. Approved proposals
+  // have graduated to the graph, so they drop off this list too.
+  const entries = [...proposals.values()]
+    .filter((entry) => {
+      const layer = classifyLayer(entry);
+      return layer === "mine" || layer === "following";
+    })
+    .sort((a, b) => b.event.created_at - a.event.created_at);
   const pending = entries.filter((entry) => proposalStatus(entry) === "pending").length;
   count.textContent = `${pending} pending`;
   if (!entries.length) {
-    list.append(elem("li", "proposal-meta", "No proposals yet."));
+    list.append(elem("li", "proposal-meta", currentIdentity ? "Nothing from you or people you follow." : "Sign in to see your proposals."));
+    updateArchivistUI();
     return;
   }
   for (const entry of entries.slice(0, 12)) {
