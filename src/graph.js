@@ -71,6 +71,7 @@ export class Graph {
     this.gMap = this.root.append("g").attr("class", "map-layer");
     this.gLink = this.root.append("g").attr("class", "links");
     this.gNode = this.root.append("g").attr("class", "nodes");
+    this.gCluster = this.root.append("g").attr("class", "clusters");
 
     this.zoom = d3
       .zoom()
@@ -83,16 +84,28 @@ export class Graph {
         this.k = e.transform.k;
         this.transform = e.transform;
         this.root.attr("transform", e.transform);
+        this._hideClusterPop();
         this._tick();
         this._applyZoomDetail();
       });
     svg.call(this.zoom);
     svg.on("dblclick.zoom", null);
     svg.on("click", (e) => {
-      if (e.target === svg.node()) this.select(null);
+      if (e.target === svg.node()) {
+        this.select(null);
+        this._hideClusterPop();
+      }
     });
 
+    // Popover for expanding a geographic cluster into its member nodes.
+    const stage = svg.node().parentNode;
+    this.clusterPop = document.createElement("div");
+    this.clusterPop.className = "geo-cluster-pop";
+    this.clusterPop.hidden = true;
+    stage.appendChild(this.clusterPop);
+
     this._world = null; // basemap land (FeatureCollection), loaded async
+    this._clusters = [];
     this._borders = null; // internal country borders (mesh)
     this._loadBasemap();
 
@@ -254,6 +267,9 @@ export class Graph {
     // screen size while its position (in the root, scaled by k) fans apart.
     const inv = 1 / (this.k || 1);
     this.nodeSel.attr("transform", (d) => `translate(${d.x},${d.y}) scale(${inv})`);
+    if (this._clusters && this._clusters.length) {
+      this.gCluster.selectAll("g.geo-cluster").attr("transform", (c) => `translate(${c.x},${c.y}) scale(${inv})`);
+    }
     this._maybeRelabel();
   }
 
@@ -404,7 +420,8 @@ export class Graph {
   _visible(d) {
     // The geography lens only shows things with a real location; abstract nodes
     // (most people/ideas, and works without coordinates) can't sit on a map.
-    if (this.layout === "geo" && (d.lat == null || d.lon == null)) return false;
+    // Nodes folded into a cluster marker are hidden until the cluster is opened.
+    if (this.layout === "geo" && (d.lat == null || d.lon == null || d._clustered)) return false;
     return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d);
   }
 
@@ -426,6 +443,10 @@ export class Graph {
   _forceLayout() {
     const settings = this._settings();
     this.gMap.selectAll("*").remove();
+    this.gCluster.selectAll("*").remove();
+    this._clusters = [];
+    this._hideClusterPop();
+    for (const n of this.nodes) n._clustered = false;
     this.simulation.force("geoX", null);
     this.simulation.force("geoY", null);
     for (const n of this.nodes) {
@@ -460,8 +481,9 @@ export class Graph {
     this._drawBasemap(projection);
 
     // Fix located nodes at their real coordinates; only these are shown in geo
-    // mode (see _visible). A gentle collision keeps co-located places legible.
+    // mode (see _visible).
     for (const n of this.nodes) {
+      n._clustered = false;
       if (n.lat != null && n.lon != null) {
         const [x, y] = projection([n.lon, n.lat]);
         n.fx = x; n.fy = y; n.x = x; n.y = y;
@@ -469,13 +491,104 @@ export class Graph {
         n.fx = null; n.fy = null;
       }
     }
+
+    // Group located nodes that land on the same spot (everything in Marfa,
+    // everything in NYC…) into one counted cluster marker; a click expands it.
+    const located = this.nodes.filter(
+      (n) => n.lat != null && n.lon != null && this.activeTypes.has(n.type) && this._inTime(n) && this._inLayers(n)
+    );
+    const R = 30; // px in base-projection space
+    const clusters = [];
+    for (const n of located) {
+      let c = clusters.find((k) => Math.hypot(k.sx - n.x, k.sy - n.y) <= R);
+      if (!c) {
+        c = { sx: n.x, sy: n.y, members: [] };
+        clusters.push(c);
+      }
+      c.members.push(n);
+    }
+    for (const c of clusters) {
+      c.x = c.members.reduce((s, m) => s + m.x, 0) / c.members.length;
+      c.y = c.members.reduce((s, m) => s + m.y, 0) / c.members.length;
+      if (c.members.length > 1) {
+        for (const m of c.members) {
+          m._clustered = true;
+          m.fx = c.x; m.fy = c.y; m.x = c.x; m.y = c.y;
+        }
+      }
+    }
+    this._clusters = clusters.filter((c) => c.members.length > 1);
+
     this.simulation.force("geoX", null);
     this.simulation.force("geoY", null);
     this.simulation.force("charge").strength(-30);
     this.simulation.force("link").strength(0.05).distance(30);
     this.simulation.force("collide").radius((d) => d.r + this._settings().collisionPadding);
-    this.simulation.alpha(0.5).restart();
+    this.simulation.alpha(0.4).restart();
+    this._renderClusters();
     this._applyVisibility();
+    this._hideClusterPop();
+  }
+
+  _renderClusters() {
+    const sel = this.gCluster.selectAll("g.geo-cluster").data(this._clusters, (c, i) => i);
+    sel.exit().remove();
+    const enter = sel.enter().append("g").attr("class", "geo-cluster").style("cursor", "pointer");
+    enter.append("circle").attr("class", "geo-cluster-dot");
+    enter.append("text").attr("class", "geo-cluster-count").attr("dy", "0.34em");
+    const merged = enter.merge(sel);
+    merged.select(".geo-cluster-dot").attr("r", (c) => 13 + Math.min(7, c.members.length));
+    merged.select(".geo-cluster-count").text((c) => c.members.length);
+    merged.on("click", (e, c) => {
+      e.stopPropagation();
+      this._showClusterPop(c);
+    });
+    const inv = 1 / (this.k || 1);
+    merged.attr("transform", (c) => `translate(${c.x},${c.y}) scale(${inv})`);
+  }
+
+  _showClusterPop(cluster) {
+    const pop = this.clusterPop;
+    if (!pop) return;
+    pop.replaceChildren();
+    const head = document.createElement("div");
+    head.className = "gcp-head";
+    head.textContent = cluster.members[0].place || `${cluster.members.length} here`;
+    pop.appendChild(head);
+    for (const m of cluster.members) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "gcp-item";
+      const sw = document.createElement("span");
+      sw.className = "gcp-swatch";
+      sw.style.background = this._typeDef(m.type).color;
+      const label = document.createElement("span");
+      label.className = "gcp-title";
+      label.textContent = m.title;
+      item.append(sw, label);
+      item.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        this.select(m.id);
+        this._hideClusterPop();
+      });
+      pop.appendChild(item);
+    }
+    const t = this.transform && this.transform.apply ? this.transform : { apply: (p) => p };
+    const [sx, sy] = t.apply([cluster.x, cluster.y]);
+    const stage = this.svg.node().parentNode;
+    const W = stage.clientWidth, H = stage.clientHeight;
+    pop.hidden = false;
+    const pw = pop.offsetWidth || 210, ph = pop.offsetHeight || 200;
+    let left = sx + 18;
+    let top = sy - 12;
+    if (left + pw > W - 8) left = sx - pw - 18;
+    if (top + ph > H - 8) top = Math.max(8, H - ph - 8);
+    pop.style.left = Math.max(8, left) + "px";
+    pop.style.top = Math.max(8, top) + "px";
+  }
+
+  _hideClusterPop() {
+    if (this.clusterPop) this.clusterPop.hidden = true;
   }
 
   // Draw the country basemap under the projected place nodes, using the same
