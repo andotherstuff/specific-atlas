@@ -4,6 +4,7 @@
 import {
   finalizeEvent,
   getPublicKey,
+  getEventHash,
   generateSecretKey,
   verifyEvent,
   SimplePool,
@@ -25,9 +26,10 @@ import {
 //
 //   ARCHIVIST(S) — a SEPARATE authority that reviews proposals and signs
 //   approve/reject moderation votes (kind 31989). Rotatable and threshold-based;
-//   lives entirely in ARCHIVIST_PUBKEYS below. Approval never re-signs the node
-//   (Judd is burned) — it is a vote that promotes the contributor's own event
-//   into the canonical graph, PR-of-provenance style.
+//   lives entirely in ARCHIVIST_PUBKEYS below. On approval the archivist edits
+//   the proposal and re-publishes it as its own curated NODE_KIND event (see
+//   buildCuratedNodeEvent), crediting the proposer — like a maintainer merging a
+//   PR with edits. Judd (burned) never re-signs anything.
 // ---------------------------------------------------------------------------
 export const JUDD_NPUB =
   "npub1wm4ez7ludz9cfatn84gxrnmsaxjf9kz04xrysmelqyulgzv7ws4skl6f8m";
@@ -46,6 +48,13 @@ export const APPROVAL_THRESHOLD = 1;
 export const NODE_KIND = 31987;
 export const PROPOSAL_KIND = 31988;
 export const MODERATION_KIND = 31989;
+export const MUTE_KIND = 10000; // NIP-51 mute list (archivist's blocked contributors)
+
+// NIP-13 proof-of-work: proposals must commit this many leading zero bits in the
+// event id. A fast speed-bump (a fraction of a second for a genuine contributor)
+// that taxes casual mass-flooding; the WoT buckets, rate cap and mute list carry
+// the real weight. Proposals below this are deprioritized/flagged, never dropped.
+export const POW_MIN_BITS = 12;
 
 // A fixed base time so re-seeding produces identical event ids (idempotent).
 const SEED_BASE = 1_704_067_200; // 2024-01-01T00:00:00Z
@@ -167,6 +176,75 @@ export function buildModerationEvent(proposal, action, note = "") {
   };
 }
 
+// Approval with editorial control: rather than promote the contributor's raw
+// event, the archivist publishes their own curated NODE_KIND node (edited for
+// content/style/tone) signed by the archivist key, crediting the proposer via
+// `proposed-by` and linking the source proposal via `from-proposal`/`e`. The
+// contributor keeps authorship credit; the archive owns the published text.
+export function buildCuratedNodeEvent(node, proposal) {
+  const tags = buildNodeEvent(node).tags.filter((t) => t[0] !== "client");
+  tags.push(["proposed-by", proposal.pubkey]);
+  tags.push(["from-proposal", proposal.id]);
+  tags.push(["e", proposal.id]);
+  tags.push(["client", "specific-objects-atlas"]);
+  return {
+    kind: NODE_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: node.content || "",
+  };
+}
+
+// ---- NIP-13 proof-of-work ------------------------------------------------
+function leadingZeroBits(hex) {
+  let bits = 0;
+  for (const ch of hex) {
+    const nibble = parseInt(ch, 16);
+    if (nibble === 0) {
+      bits += 4;
+      continue;
+    }
+    bits += Math.clz32(nibble) - 28; // leading zeros within the 4-bit nibble
+    break;
+  }
+  return bits;
+}
+
+export function powDifficulty(id) {
+  return typeof id === "string" ? leadingZeroBits(id) : 0;
+}
+
+// Mine a `nonce` tag until the event id commits `targetBits` leading zeros.
+// Requires template.pubkey to be set (the id depends on it). Gives up after
+// maxMs and returns the best-effort event so signing never hangs forever.
+export function mineProofOfWork(template, targetBits = POW_MIN_BITS, maxMs = 8000) {
+  const base = template.tags.filter((t) => t[0] !== "nonce");
+  const start = Date.now();
+  let nonce = 0;
+  while (true) {
+    const candidate = { ...template, tags: [...base, ["nonce", String(nonce), String(targetBits)]] };
+    const id = getEventHash(candidate);
+    if (leadingZeroBits(id) >= targetBits) return { ...candidate, id };
+    nonce++;
+    if ((nonce & 0x1fff) === 0 && Date.now() - start > maxMs) return { ...candidate, id };
+  }
+}
+
+// ---- NIP-51 mute list ----------------------------------------------------
+export function buildMuteEvent(pubkeys) {
+  return {
+    kind: MUTE_KIND,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [...pubkeys].map((pk) => ["p", pk]),
+    content: "",
+  };
+}
+
+export function mutesFromEvent(ev) {
+  if (!ev || ev.kind !== MUTE_KIND) return new Set();
+  return new Set(ev.tags.filter((t) => t[0] === "p" && t[1]?.length === 64).map((t) => t[1]));
+}
+
 // Turn a received Nostr event back into an atlas node.
 export function eventToNode(ev) {
   const get = (k) => ev.tags.find((t) => t[0] === k)?.[1];
@@ -193,6 +271,7 @@ export function eventToNode(ev) {
     edges,
     _event: ev, // keep the raw event for provenance display
     _author: ev.pubkey,
+    _proposedBy: cleanText(get("proposed-by"), 64) || undefined, // curated node credit
   };
 }
 
@@ -374,9 +453,10 @@ export class AtlasClient {
     return this.status();
   }
 
-  // Read every canonical atlas node the archive key has published.
+  // Read every canonical atlas node: the sealed Judd seed plus archivist-curated
+  // additions (approved proposals the archive re-published under its own key).
   async fetchArchive(timeoutMs = 4500) {
-    const filter = { kinds: [NODE_KIND], authors: [FOUNDATION_PK], limit: 500 };
+    const filter = { kinds: [NODE_KIND], authors: [FOUNDATION_PK, ...ARCHIVIST_PUBKEYS], limit: 500 };
     let events = [];
     try {
       events = await this.pool.querySync(RELAYS, filter, { maxWait: timeoutMs });
@@ -444,6 +524,19 @@ export class AtlasClient {
     return new Set(latest ? contactsFromEvent(latest) : []);
   }
 
+  // The archivist's mute list (NIP-51 kind 10000). Muted contributors' proposals
+  // are hidden from the review queue. Newest event wins.
+  async fetchMuteList(pubkey, timeoutMs = 4500) {
+    let events = [];
+    try {
+      events = await this.pool.querySync(PROFILE_RELAYS, { kinds: [MUTE_KIND], authors: [pubkey] }, { maxWait: timeoutMs });
+    } catch {
+      events = [];
+    }
+    const latest = events.filter(verifyEvent).sort((a, b) => b.created_at - a.created_at)[0];
+    return new Set(latest ? mutesFromEvent(latest) : []);
+  }
+
   subscribeLive(onNode, onProposal, onModeration) {
     const filter = { kinds: [NODE_KIND], "#t": ["donald-judd"] };
     const proposalFilter = { kinds: [PROPOSAL_KIND], "#t": ["donald-judd"] };
@@ -459,7 +552,7 @@ export class AtlasClient {
           onModeration?.(ev);
           return;
         }
-        if (ev.pubkey !== FOUNDATION_PK) return;
+        if (ev.pubkey !== FOUNDATION_PK && !ARCHIVIST_PUBKEYS.includes(ev.pubkey)) return;
         const node = eventToNode(ev);
         if (!node) return;
         onNode(node);

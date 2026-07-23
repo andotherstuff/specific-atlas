@@ -7,7 +7,7 @@
   <title>SPECIFIC ATLAS—An Atlas of Donald Judd</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='8' y='7' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='14' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='21' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://esm.sh" />
-  <link rel="stylesheet" href="./styles.css?v=2" />
+  <link rel="stylesheet" href="./styles.css?v=3" />
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 </head>
 <body>
@@ -172,26 +172,27 @@
     </div>
   </div>
 
-  <!-- archivist review queue -->
+  <!-- archivist review queue (full-page route: #review) -->
   <div id="review-scrim" hidden>
     <div id="review-modal">
       <header id="review-head">
         <div>
+          <button id="review-close" class="ghost">← Atlas</button>
           <h3>Review queue</h3>
-          <p class="modal-sub" id="review-sub">Approve proposals into the atlas, or decline them. Declined proposals stay visible only to their author and that author's followers.</p>
+          <p class="modal-sub" id="review-sub">Edit proposals into shape and publish them under the archive, or decline them. Declined proposals stay visible only to their author and that author's followers.</p>
         </div>
-        <button id="review-close" class="ghost">Close</button>
       </header>
       <div id="review-filters" class="seg" role="tablist">
         <button data-filter="pending" class="on" role="tab">Pending</button>
         <button data-filter="approved" role="tab">Approved</button>
         <button data-filter="rejected" role="tab">Declined</button>
+        <button data-filter="muted" role="tab">Muted</button>
         <button data-filter="all" role="tab">All</button>
       </div>
       <div id="review-list"></div>
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=2"></script>
+  <script type="module" src="./src/app.js?v=3"></script>
 </body>
 </html>

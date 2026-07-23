@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=2";
-import { Graph } from "./graph.js?v=2";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=3";
+import { Graph } from "./graph.js?v=3";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -7,9 +7,14 @@ import {
   APPROVAL_THRESHOLD,
   ARCHIVIST_PUBKEYS,
   NODE_KIND,
+  POW_MIN_BITS,
   buildDeletionEvent,
   buildModerationEvent,
   buildProposalEvent,
+  buildCuratedNodeEvent,
+  buildMuteEvent,
+  mineProofOfWork,
+  powDifficulty,
   createLocalIdentity,
   eventToNode,
   getExtensionIdentity,
@@ -18,7 +23,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=2";
+} from "./nostr.js?v=3";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -508,6 +513,38 @@ function registerNode(node, state = "live") {
   return true;
 }
 
+// A canonical archive node: either the sealed Judd seed (author = FOUNDATION_PK,
+// layer "canonical") or an archivist-curated addition (author in
+// ARCHIVIST_PUBKEYS, layer "approved", crediting a proposer). If a node with this
+// id already exists — a seed node, or the original proposal now being approved —
+// adopt the archive's (possibly edited) content over it so the published version
+// wins everywhere, including on the proposer's own screen.
+function registerArchiveNode(node) {
+  if (!node?.id) return;
+  const curated = ARCHIVIST_PUBKEYS.includes(node._author);
+  const layer = curated ? "approved" : "canonical";
+  const state = curated ? "accepted" : "confirmed";
+  const existing = index.byId.get(node.id);
+  if (existing) {
+    Object.assign(existing, {
+      title: node.title, type: node.type, start: node.start, end: node.end,
+      lat: node.lat, lon: node.lon, place: node.place, content: node.content,
+      edges: node.edges, _event: node._event, _author: node._author,
+      _proposedBy: node._proposedBy, _layer: layer, _state: state, _fromProposal: false,
+    });
+    graph.refresh();
+    refreshLegendCounts();
+    renderGeoList();
+    if (graph.selectedId === existing.id) renderPanel(existing);
+  } else {
+    node._layer = layer;
+    node._state = state;
+    node._fromProposal = false;
+    registerNode(node, state);
+    if (graph.selectedId === node.id) renderPanel(node);
+  }
+}
+
 function approvalSummary(entry) {
   return `${entry.approvals.size}/${APPROVAL_THRESHOLD} approvals`;
 }
@@ -709,42 +746,100 @@ function updateArchivistUI() {
   const arch = isArchivist();
   btn.hidden = !arch;
   if (arch) {
-    const pending = [...proposals.values()].filter((e) => proposalStatus(e) === "pending").length;
+    const pending = [...proposals.values()].filter((e) => proposalStatus(e) === "pending" && !mutedPubkeys.has(e.event.pubkey)).length;
     btn.textContent = pending ? `Open review queue · ${pending} pending` : "Open review queue";
-  } else if (reviewScrim && !reviewScrim.hidden) {
-    reviewScrim.hidden = true; // lost access (signed out / switched key)
   }
+  routeReview(); // bounce out of #review if archivist access was lost
 }
+
+const RATE_CAP = 3; // collapse a single key's pending proposals beyond this
 
 function openReview() {
   if (!isArchivist()) return;
-  reviewScrim.hidden = false;
-  renderReviewList();
+  if (location.hash !== "#review") location.hash = "review";
+  else routeReview();
 }
 
-function reviewEntries() {
-  const all = [...proposals.values()].sort((a, b) => b.event.created_at - a.event.created_at);
-  if (reviewFilter === "all") return all;
-  const want = reviewFilter === "approved" ? "accepted" : reviewFilter === "rejected" ? "rejected" : "pending";
-  return all.filter((e) => proposalStatus(e) === want);
+// The review queue is a real page at #review, gated to archivist keys. Client-
+// side gating is convenience — proposals are public — but only the archivist
+// signature approves. Non-archivists (or signed-out) are bounced to the atlas.
+function routeReview() {
+  const wantReview = location.hash === "#review";
+  if (wantReview && !isArchivist()) {
+    history.replaceState(null, "", location.pathname + location.search);
+    reviewScrim.hidden = true;
+    document.body.classList.remove("reviewing");
+    return;
+  }
+  reviewScrim.hidden = !wantReview;
+  document.body.classList.toggle("reviewing", wantReview);
+  if (wantReview) renderReviewList();
+}
+
+function isTrusted(pubkey) {
+  return currentFollows.has(pubkey) || ARCHIVIST_PUBKEYS.includes(pubkey);
+}
+
+function proposalPow(entry) {
+  return powDifficulty(entry.event.id);
+}
+
+// Highest proof-of-work first (genuine effort), then most recent.
+function sortForReview(list) {
+  return list.sort((a, b) => proposalPow(b) - proposalPow(a) || b.event.created_at - a.event.created_at);
 }
 
 function renderReviewList() {
   if (!reviewList || reviewScrim.hidden) return;
   reviewList.replaceChildren();
-  const entries = reviewEntries();
-  if (!entries.length) {
-    reviewList.append(elem("p", "review-empty", "Nothing here."));
+  const all = [...proposals.values()];
+  const unmuted = sortForReview(all.filter((e) => !mutedPubkeys.has(e.event.pubkey)));
+
+  if (reviewFilter === "muted") {
+    renderReviewSection(null, sortForReview(all.filter((e) => mutedPubkeys.has(e.event.pubkey))), "No muted contributors.");
     return;
   }
+  if (reviewFilter === "pending") {
+    const pending = unmuted.filter((e) => proposalStatus(e) === "pending");
+    if (!pending.length) {
+      reviewList.append(elem("p", "review-empty", "No pending proposals."));
+      return;
+    }
+    renderReviewSection("Trusted · in your network", pending.filter((e) => isTrusted(e.event.pubkey)), "None from people you follow.");
+    renderReviewSection("Unvetted · outside your network", pending.filter((e) => !isTrusted(e.event.pubkey)), "None.");
+    return;
+  }
+  const want = reviewFilter === "approved" ? "accepted" : reviewFilter === "rejected" ? "rejected" : null;
+  const list = want ? unmuted.filter((e) => proposalStatus(e) === want) : unmuted;
+  renderReviewSection(null, list, "Nothing here.");
+}
+
+// Render a labelled section, rate-capping each contributor to RATE_CAP cards
+// (extras collapse into a "+N more" note so one key can't flood the view).
+function renderReviewSection(title, entries, emptyText) {
+  if (title) reviewList.append(elem("div", "review-section-head", `${title} · ${entries.length}`));
+  if (!entries.length) {
+    reviewList.append(elem("p", `review-empty${title ? " small" : ""}`, emptyText));
+    return;
+  }
+  for (const entry of entries) ensureProfile(entry.event.pubkey);
+  const perKey = new Map();
   for (const entry of entries) {
-    ensureProfile(entry.event.pubkey);
-    reviewList.append(reviewCard(entry));
+    const pk = entry.event.pubkey;
+    const shown = perKey.get(pk) || 0;
+    if (shown < RATE_CAP) {
+      reviewList.append(reviewCard(entry));
+    } else if (shown === RATE_CAP) {
+      const total = entries.filter((e) => e.event.pubkey === pk).length;
+      reviewList.append(elem("div", "review-more", `+${total - RATE_CAP} more from ${contributorName(pk)} — possible flooding`));
+    }
+    perKey.set(pk, shown + 1);
   }
 }
 
 function reviewCard(entry) {
   const status = proposalStatus(entry);
+  const muted = mutedPubkeys.has(entry.event.pubkey);
   const card = elem("div", `review-card review-${status}`);
 
   const head = elem("div", "review-card-head");
@@ -755,7 +850,11 @@ function reviewCard(entry) {
     elem("div", "review-title", entry.node.title),
     elem("div", "review-by", `${TYPES[entry.node.type]?.label || entry.node.type} · proposed by ${contributorName(entry.event.pubkey)}`)
   );
-  head.append(avatar, meta, elem("span", `review-badge badge-${status}`, statusLabel(status)));
+  const badges = elem("div", "review-badges");
+  const pow = proposalPow(entry);
+  if (pow < POW_MIN_BITS) badges.append(elem("span", "review-badge badge-lowpow", `low proof · ${pow}`));
+  badges.append(elem("span", `review-badge badge-${status}`, statusLabel(status)));
+  head.append(avatar, meta, badges);
   card.append(head);
 
   if (entry.node.content) card.append(elem("p", "review-content", entry.node.content));
@@ -766,12 +865,18 @@ function reviewCard(entry) {
   }
 
   const actions = elem("div", "review-actions");
-  if (status === "pending") {
-    const approve = elem("button", "review-approve", "Approve");
-    approve.addEventListener("click", () => moderateProposal(entry, "approve"));
+  if (muted) {
+    const unmute = elem("button", null, "Unmute contributor");
+    unmute.addEventListener("click", () => unmuteContributor(entry.event.pubkey));
+    actions.append(unmute);
+  } else if (status === "pending") {
+    const edit = elem("button", "review-approve", "Edit & approve");
+    edit.addEventListener("click", () => openEditForm(card, entry));
     const decline = elem("button", "review-reject", "Decline…");
     decline.addEventListener("click", () => openRejectForm(card, entry));
-    actions.append(approve, decline);
+    const mute = elem("button", "review-mute", "Mute");
+    mute.addEventListener("click", () => muteContributor(entry.event.pubkey));
+    actions.append(edit, decline, mute);
   } else {
     const undo = elem("button", null, "Undo · re-open");
     undo.addEventListener("click", () => undoModeration(entry));
@@ -779,6 +884,124 @@ function reviewCard(entry) {
   }
   card.append(actions);
   return card;
+}
+
+// Editorial approval: the archivist edits any field, then publishes the result
+// as the archive's own curated node crediting the proposer. Publishing unchanged
+// is "approve as-is". cleanYear/TYPES come from the module top.
+function fieldWrap(label, control) {
+  const wrap = elem("label", "edit-field", label);
+  wrap.append(control);
+  return wrap;
+}
+
+function openEditForm(card, entry) {
+  if (card.querySelector(".edit-form")) return;
+  const n = entry.node;
+  const form = elem("div", "edit-form");
+
+  const titleIn = document.createElement("input");
+  titleIn.type = "text";
+  titleIn.value = n.title || "";
+
+  const typeSel = document.createElement("select");
+  for (const t of Object.keys(TYPES)) {
+    const o = document.createElement("option");
+    o.value = t;
+    o.textContent = TYPES[t].label;
+    if (t === n.type) o.selected = true;
+    typeSel.append(o);
+  }
+
+  const yearIn = document.createElement("input");
+  yearIn.type = "number";
+  yearIn.value = n.start ?? "";
+
+  const contentTa = document.createElement("textarea");
+  contentTa.rows = 5;
+  contentTa.value = n.content || "";
+
+  const row = elem("div", "edit-form-actions");
+  const publish = elem("button", "review-approve", "Approve & publish");
+  const cancel = elem("button", null, "Cancel");
+  publish.addEventListener("click", () => {
+    publish.disabled = true;
+    approveProposal(entry, {
+      ...n,
+      title: titleIn.value.trim() || n.title,
+      type: TYPES[typeSel.value] ? typeSel.value : n.type,
+      start: cleanYear(yearIn.value) ?? n.start,
+      content: contentTa.value.trim(),
+      edges: n.edges,
+    });
+  });
+  cancel.addEventListener("click", () => form.remove());
+  row.append(publish, cancel);
+
+  form.append(
+    fieldWrap("Title", titleIn),
+    fieldWrap("Kind", typeSel),
+    fieldWrap("Year", yearIn),
+    fieldWrap("Note", contentTa),
+    row
+  );
+  card.append(form);
+  titleIn.focus();
+}
+
+async function approveProposal(entry, editedNode) {
+  if (!isArchivist()) return;
+  const node = editedNode || entry.node;
+  try {
+    // 1) publish the archive's curated node (the canonical, edited text)
+    const curated = await signWithIdentity(currentIdentity, buildCuratedNodeEvent(node, entry.event));
+    await client.publish(curated);
+    // 2) record the approval so the proposal leaves the pending queue everywhere
+    const vote = await signWithIdentity(currentIdentity, buildModerationEvent(entry.event, "approve"));
+    await client.publish(vote);
+    applyModerationEvent(vote);
+    // 3) reflect the curated node locally at once
+    registerArchiveNode(eventToNode(curated));
+    applyLayers();
+    renderProposalQueue();
+    renderReviewList();
+    updateArchivistUI();
+  } catch (err) {
+    console.warn("Approve failed:", err);
+  }
+}
+
+async function publishMuteList(next) {
+  const signed = await signWithIdentity(currentIdentity, buildMuteEvent(next));
+  await client.publish(signed);
+  mutedPubkeys = next;
+  syncAllProposals();
+  applyLayers();
+  renderProposalQueue();
+  renderReviewList();
+  updateArchivistUI();
+}
+
+async function muteContributor(pubkey) {
+  if (!isArchivist()) return;
+  const next = new Set(mutedPubkeys);
+  next.add(pubkey);
+  try {
+    await publishMuteList(next);
+  } catch (err) {
+    console.warn("Mute failed:", err);
+  }
+}
+
+async function unmuteContributor(pubkey) {
+  if (!isArchivist()) return;
+  const next = new Set(mutedPubkeys);
+  next.delete(pubkey);
+  try {
+    await publishMuteList(next);
+  } catch (err) {
+    console.warn("Unmute failed:", err);
+  }
 }
 
 function openRejectForm(card, entry) {
@@ -799,9 +1022,8 @@ function openRejectForm(card, entry) {
 }
 
 $("#review-open").addEventListener("click", openReview);
-$("#review-close").addEventListener("click", () => (reviewScrim.hidden = true));
-reviewScrim.addEventListener("click", (e) => {
-  if (e.target === reviewScrim) reviewScrim.hidden = true;
+$("#review-close").addEventListener("click", () => {
+  location.hash = "";
 });
 $$("#review-filters button").forEach((b) => {
   b.addEventListener("click", () => {
@@ -811,6 +1033,8 @@ $$("#review-filters button").forEach((b) => {
     renderReviewList();
   });
 });
+window.addEventListener("hashchange", routeReview);
+routeReview();
 
 // ---------------------------------------------------------------------------
 // Provenance layers — what the viewer sees in the graph.
@@ -833,6 +1057,7 @@ const LAYERS = [
 ];
 const activeLayers = new Set(["canonical", "approved"]);
 let currentFollows = new Set();
+let mutedPubkeys = new Set(); // archivist's NIP-51 mute list
 
 function layerOfNode(n) {
   return n._layer || "canonical";
@@ -849,9 +1074,12 @@ function layerCounts() {
 }
 
 // Which layer a proposal belongs to for THIS viewer, or null if not shown.
+// Approved proposals are superseded by the archivist's curated archive node
+// (registered separately as the "approved" layer), so they drop out here.
 function classifyLayer(entry) {
-  if (proposalStatus(entry) === "accepted") return "approved";
+  if (proposalStatus(entry) === "accepted") return null;
   const author = entry.event.pubkey;
+  if (mutedPubkeys.has(author)) return null; // muted contributor
   if (currentIdentity && author === currentIdentity.pubkey) return "mine";
   if (currentFollows.has(author)) return "following";
   return null;
@@ -930,14 +1158,21 @@ async function onIdentityChanged() {
     activeLayers.delete("mine");
     activeLayers.delete("following");
     currentFollows = new Set();
+    mutedPubkeys = new Set();
   }
   syncAllProposals();
+  renderReviewList();
   if (currentIdentity) {
     const who = currentIdentity.pubkey;
-    const follows = await client.fetchContacts(who);
+    const [follows, mutes] = await Promise.all([
+      client.fetchContacts(who),
+      isArchivist() ? client.fetchMuteList(who) : Promise.resolve(new Set()),
+    ]);
     if (currentIdentity && currentIdentity.pubkey === who) {
       currentFollows = follows;
+      mutedPubkeys = mutes;
       syncAllProposals();
+      renderReviewList();
     }
   }
 }
@@ -950,14 +1185,7 @@ graph.setLayers(activeLayers);
     await client.connect();
     statusText.textContent = "loading the atlas…";
     const existing = await client.fetchArchive();
-    // mark confirmed nodes
-    for (const ev of existing) {
-      const d = ev.tags.find((t) => t[0] === "d")?.[1];
-      const n = index.byId.get(d);
-      if (n) {
-        setNodeState(n, "confirmed", ev);
-      }
-    }
+    existing.map(eventToNode).filter(Boolean).forEach(registerArchiveNode);
     if (graph.selectedId) renderPanel(index.byId.get(graph.selectedId));
 
     const proposalEvents = await client.fetchProposals();
@@ -968,7 +1196,7 @@ graph.setLayers(activeLayers);
     renderStatus(client.status());
 
     client.subscribeLive(
-      (node) => registerNode(node, "live"),
+      (node) => registerArchiveNode(node),
       (ev) => upsertProposal(ev),
       (ev) => applyModerationEvent(ev)
     );
@@ -1190,10 +1418,12 @@ $("#m-publish").addEventListener("click", async () => {
     edges: [[target, "linked to"]],
   };
   const template = buildProposalEvent(node);
+  template.pubkey = currentIdentity.pubkey;
 
-  $("#m-status").textContent = "signing proposal…";
   try {
-    const signed = await signWithIdentity(currentIdentity, template);
+    $("#m-status").textContent = "computing proof-of-work…";
+    await new Promise((r) => setTimeout(r, 20)); // let the status paint before we block
+    const signed = await signWithIdentity(currentIdentity, mineProofOfWork(template, POW_MIN_BITS));
     $("#m-status").textContent = "submitting proposal…";
     const res = await client.publish(signed);
     upsertProposal(signed);
