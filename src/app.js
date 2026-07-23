@@ -535,6 +535,7 @@ function upsertProposal(ev) {
   syncProposalNode(entry);
   applyLayers();
   renderProposalQueue();
+  renderReviewList();
   return entry;
 }
 
@@ -543,6 +544,11 @@ function applyModerationEvent(ev) {
   if (!vote) return;
   const entry = proposals.get(vote.proposalId);
   if (!entry) return;
+  // Moderation events are not replaceable, so a single archivist's decision is
+  // whichever vote is newest. Ignore anything older than what we already hold
+  // for that pubkey (guards out-of-order delivery and makes undo/re-open sound).
+  const prev = entry.approvals.get(vote.pubkey) || entry.rejections.get(vote.pubkey);
+  if (prev && prev.event && prev.event.created_at >= ev.created_at) return;
   if (vote.action === "approve") {
     entry.rejections.delete(vote.pubkey);
     entry.approvals.set(vote.pubkey, vote);
@@ -553,6 +559,8 @@ function applyModerationEvent(ev) {
   syncProposalNode(entry);
   applyLayers();
   renderProposalQueue();
+  renderReviewList();
+  updateArchivistUI();
 }
 
 function isArchivist() {
@@ -583,13 +591,7 @@ function renderProposalQueue() {
       )
     );
     const actions = elem("div", "proposal-actions");
-    if (isArchivist() && status === "pending") {
-      const approve = elem("button", null, "Approve");
-      const reject = elem("button", null, "Reject");
-      approve.addEventListener("click", () => moderateProposal(entry, "approve"));
-      reject.addEventListener("click", () => moderateProposal(entry, "reject"));
-      actions.append(approve, reject);
-    }
+    // Archivists moderate from the dedicated review queue, not this rail list.
     // The author can withdraw their own proposal (NIP-09) — used to clean up
     // test/junk proposals. Relays only honor deletions from the signing pubkey.
     if (currentIdentity && entry.event.pubkey === currentIdentity.pubkey) {
@@ -606,6 +608,7 @@ function renderProposalQueue() {
     });
     list.append(li);
   }
+  updateArchivistUI();
 }
 
 async function withdrawProposal(entry) {
@@ -623,19 +626,180 @@ async function withdrawProposal(entry) {
   }
 }
 
-async function moderateProposal(entry, action) {
-  if (!isArchivist()) {
-    $("#id-status").textContent = "Only configured archivist identities can moderate.";
-    return;
-  }
+async function moderateProposal(entry, action, note = "") {
+  if (!isArchivist()) return;
   try {
-    const signed = await signWithIdentity(currentIdentity, buildModerationEvent(entry.event, action));
+    const signed = await signWithIdentity(currentIdentity, buildModerationEvent(entry.event, action, note));
     await client.publish(signed);
     applyModerationEvent(signed);
   } catch (err) {
     console.warn("Moderation failed:", err);
   }
 }
+
+// Undo/re-open: an archivist retracts their own decision by publishing a NIP-09
+// deletion of their moderation vote. Removing the only vote returns the proposal
+// to pending. Relays honor deletions only from the signing (archivist) pubkey.
+async function undoModeration(entry) {
+  if (!isArchivist()) return;
+  const pk = currentIdentity.pubkey;
+  const mine = entry.approvals.get(pk) || entry.rejections.get(pk);
+  if (!mine) return;
+  try {
+    const signed = await signWithIdentity(currentIdentity, buildDeletionEvent(mine.event, "Re-opened by archivist."));
+    await client.publish(signed);
+    entry.approvals.delete(pk);
+    entry.rejections.delete(pk);
+    syncProposalNode(entry);
+    applyLayers();
+    renderProposalQueue();
+    renderReviewList();
+    updateArchivistUI();
+  } catch (err) {
+    console.warn("Undo failed:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Archivist review queue — a dedicated screen, shown only to archivist keys.
+// Gating here is convenience: proposals are public and the real authority is
+// the signature on the moderation event. The queue reads every fetched proposal
+// (not just graph-visible ones), so the archivist sees the whole backlog.
+// ---------------------------------------------------------------------------
+const reviewScrim = $("#review-scrim");
+const reviewList = $("#review-list");
+const profileCache = new Map(); // pubkey -> profile | null (in-flight)
+let reviewFilter = "pending";
+
+async function ensureProfile(pubkey) {
+  if (profileCache.has(pubkey)) return;
+  profileCache.set(pubkey, null);
+  let p = null;
+  try {
+    p = await client.fetchProfile(pubkey);
+  } catch {
+    p = null;
+  }
+  profileCache.set(pubkey, p || { pubkey });
+  if (!reviewScrim.hidden) renderReviewList();
+}
+
+function contributorName(pubkey) {
+  return profileCache.get(pubkey)?.name || safeNpubShort(pubkey);
+}
+
+function statusLabel(status) {
+  return status === "accepted" ? "Approved" : status === "rejected" ? "Declined" : "Pending";
+}
+
+function updateArchivistUI() {
+  const btn = $("#review-open");
+  if (!btn) return;
+  const arch = isArchivist();
+  btn.hidden = !arch;
+  if (arch) {
+    const pending = [...proposals.values()].filter((e) => proposalStatus(e) === "pending").length;
+    btn.textContent = pending ? `Open review queue · ${pending} pending` : "Open review queue";
+  } else if (reviewScrim && !reviewScrim.hidden) {
+    reviewScrim.hidden = true; // lost access (signed out / switched key)
+  }
+}
+
+function openReview() {
+  if (!isArchivist()) return;
+  reviewScrim.hidden = false;
+  renderReviewList();
+}
+
+function reviewEntries() {
+  const all = [...proposals.values()].sort((a, b) => b.event.created_at - a.event.created_at);
+  if (reviewFilter === "all") return all;
+  const want = reviewFilter === "approved" ? "accepted" : reviewFilter === "rejected" ? "rejected" : "pending";
+  return all.filter((e) => proposalStatus(e) === want);
+}
+
+function renderReviewList() {
+  if (!reviewList || reviewScrim.hidden) return;
+  reviewList.replaceChildren();
+  const entries = reviewEntries();
+  if (!entries.length) {
+    reviewList.append(elem("p", "review-empty", "Nothing here."));
+    return;
+  }
+  for (const entry of entries) {
+    ensureProfile(entry.event.pubkey);
+    reviewList.append(reviewCard(entry));
+  }
+}
+
+function reviewCard(entry) {
+  const status = proposalStatus(entry);
+  const card = elem("div", `review-card review-${status}`);
+
+  const head = elem("div", "review-card-head");
+  const avatar = elem("span", "account-avatar");
+  renderAvatar(avatar, profileCache.get(entry.event.pubkey)?.picture, "warn");
+  const meta = elem("div", "review-card-meta");
+  meta.append(
+    elem("div", "review-title", entry.node.title),
+    elem("div", "review-by", `${TYPES[entry.node.type]?.label || entry.node.type} · proposed by ${contributorName(entry.event.pubkey)}`)
+  );
+  head.append(avatar, meta, elem("span", `review-badge badge-${status}`, statusLabel(status)));
+  card.append(head);
+
+  if (entry.node.content) card.append(elem("p", "review-content", entry.node.content));
+
+  const reason = [...entry.rejections.values()].map((v) => v.note).find(Boolean);
+  if (status === "rejected" && reason) {
+    card.append(elem("p", "review-reason", `Reason: ${reason}`));
+  }
+
+  const actions = elem("div", "review-actions");
+  if (status === "pending") {
+    const approve = elem("button", "review-approve", "Approve");
+    approve.addEventListener("click", () => moderateProposal(entry, "approve"));
+    const decline = elem("button", "review-reject", "Decline…");
+    decline.addEventListener("click", () => openRejectForm(card, entry));
+    actions.append(approve, decline);
+  } else {
+    const undo = elem("button", null, "Undo · re-open");
+    undo.addEventListener("click", () => undoModeration(entry));
+    actions.append(undo);
+  }
+  card.append(actions);
+  return card;
+}
+
+function openRejectForm(card, entry) {
+  if (card.querySelector(".reject-form")) return;
+  const form = elem("div", "reject-form");
+  const ta = document.createElement("textarea");
+  ta.rows = 2;
+  ta.placeholder = "Optional reason — shown to the contributor";
+  const row = elem("div", "reject-form-actions");
+  const confirm = elem("button", "review-reject", "Confirm decline");
+  const cancel = elem("button", null, "Cancel");
+  confirm.addEventListener("click", () => moderateProposal(entry, "reject", ta.value.trim()));
+  cancel.addEventListener("click", () => form.remove());
+  row.append(confirm, cancel);
+  form.append(ta, row);
+  card.append(form);
+  ta.focus();
+}
+
+$("#review-open").addEventListener("click", openReview);
+$("#review-close").addEventListener("click", () => (reviewScrim.hidden = true));
+reviewScrim.addEventListener("click", (e) => {
+  if (e.target === reviewScrim) reviewScrim.hidden = true;
+});
+$$("#review-filters button").forEach((b) => {
+  b.addEventListener("click", () => {
+    reviewFilter = b.dataset.filter;
+    $$("#review-filters button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on");
+    renderReviewList();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Provenance layers — what the viewer sees in the graph.

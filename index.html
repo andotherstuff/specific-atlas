@@ -68,6 +68,7 @@
       <section class="facet" id="proposal-wrap">
         <h2>Proposals <span class="hint" id="proposal-count">0 pending</span></h2>
         <ul id="proposal-list" class="proposals"></ul>
+        <button id="review-open" class="primary block" hidden>Open review queue</button>
       </section>
 
       <footer id="rail-foot">
@@ -168,6 +169,26 @@
         <button id="id-logout" class="ghost">Log out</button>
         <button id="account-close" class="ghost">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- archivist review queue -->
+  <div id="review-scrim" hidden>
+    <div id="review-modal">
+      <header id="review-head">
+        <div>
+          <h3>Review queue</h3>
+          <p class="modal-sub" id="review-sub">Approve proposals into the atlas, or decline them. Declined proposals stay visible only to their author and that author's followers.</p>
+        </div>
+        <button id="review-close" class="ghost">Close</button>
+      </header>
+      <div id="review-filters" class="seg" role="tablist">
+        <button data-filter="pending" class="on" role="tab">Pending</button>
+        <button data-filter="approved" role="tab">Approved</button>
+        <button data-filter="rejected" role="tab">Declined</button>
+        <button data-filter="all" role="tab">All</button>
+      </div>
+      <div id="review-list"></div>
     </div>
   </div>
 

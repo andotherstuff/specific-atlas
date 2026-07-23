@@ -296,12 +296,29 @@ function waitForSigner(timeoutMs = 2000) {
   });
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export async function getExtensionIdentity() {
   const signer = await waitForSigner();
   if (!signer) {
     throw new Error("No browser signer found. Install a signer extension, or use another sign-in method.");
   }
-  return { type: "extension", pubkey: await signer.getPublicKey() };
+  // Even once window.nostr exists, the extension's background service worker may
+  // be asleep on first use — the first getPublicKey() then rejects with
+  // "Could not establish connection", which is why a second click "worked."
+  // That first call wakes the worker, so retry a few times before giving up.
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const pubkey = await signer.getPublicKey();
+      if (pubkey) return { type: "extension", pubkey };
+      lastErr = new Error("Signer returned no key.");
+    } catch (err) {
+      lastErr = err;
+    }
+    await sleep(300);
+  }
+  throw new Error(`Couldn't reach your signer extension${lastErr?.message ? ` (${lastErr.message})` : ""}. Try again.`);
 }
 
 export async function signWithIdentity(identity, template) {
