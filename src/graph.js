@@ -87,6 +87,10 @@ export class Graph {
         this._hideClusterPop();
         this._tick();
         this._applyZoomDetail();
+      })
+      .on("end", () => {
+        // Re-cluster once the gesture settles: markers merge/split with the zoom.
+        if (this.layout === "geo") this._recomputeGeoClusters();
       });
     svg.call(this.zoom);
     svg.on("dblclick.zoom", null);
@@ -464,79 +468,91 @@ export class Graph {
   }
 
   _geoLayout() {
+    // Reset any leftover zoom so the projection fit is correct and clusters are
+    // computed at k=1. (Set d3-zoom's stored transform directly to avoid firing
+    // the zoom handler.)
+    this.k = 1;
+    this.transform = d3.zoomIdentity;
+    this.svg.node().__zoom = d3.zoomIdentity;
+    this.root.attr("transform", d3.zoomIdentity);
+
+    // Fit the WHOLE extent of located places so nothing (e.g. Korea) is left off
+    // screen; density is handled by zoom-aware clustering below.
     const geoNodes = this.nodes.filter((n) => n.lat != null && n.lon != null);
     const fc = {
       type: "FeatureCollection",
-      features: geoNodes.map((n) => ({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [n.lon, n.lat] },
-      })),
+      features: geoNodes.map((n) => ({ type: "Feature", geometry: { type: "Point", coordinates: [n.lon, n.lat] } })),
     };
     const pad = this._settings().geoPad;
-    const projection = d3
-      .geoMercator()
-      .fitExtent([[pad, pad], [this.W - pad, this.H - pad]], fc);
+    const projection = d3.geoMercator().fitExtent([[pad, pad], [this.W - pad, this.H - pad]], fc);
     this.projection = projection;
 
     this._drawBasemap(projection);
 
-    // Fix located nodes at their real coordinates; only these are shown in geo
-    // mode (see _visible).
+    // Pin located nodes at their real coordinates (kept in _px/_py so clusters can
+    // be recomputed at any zoom); un-located nodes are hidden in geo mode.
     for (const n of this.nodes) {
       n._clustered = false;
       if (n.lat != null && n.lon != null) {
         const [x, y] = projection([n.lon, n.lat]);
-        n.fx = x; n.fy = y; n.x = x; n.y = y;
+        n._px = x; n._py = y; n.fx = x; n.fy = y; n.x = x; n.y = y;
       } else {
-        n.fx = null; n.fy = null;
+        n._px = null; n._py = null; n.fx = null; n.fy = null;
       }
     }
-
-    // Group located nodes that land on the same spot (everything in Marfa,
-    // everything in NYC…) into one counted cluster marker; a click expands it.
-    const located = this.nodes.filter(
-      (n) => n.lat != null && n.lon != null && this.activeTypes.has(n.type) && this._inTime(n) && this._inLayers(n)
-    );
-    const R = 30; // px in base-projection space
-    const clusters = [];
-    for (const n of located) {
-      let c = clusters.find((k) => Math.hypot(k.sx - n.x, k.sy - n.y) <= R);
-      if (!c) {
-        c = { sx: n.x, sy: n.y, members: [] };
-        clusters.push(c);
-      }
-      c.members.push(n);
-    }
-    for (const c of clusters) {
-      c.x = c.members.reduce((s, m) => s + m.x, 0) / c.members.length;
-      c.y = c.members.reduce((s, m) => s + m.y, 0) / c.members.length;
-      if (c.members.length > 1) {
-        for (const m of c.members) {
-          m._clustered = true;
-          m.fx = c.x; m.fy = c.y; m.x = c.x; m.y = c.y;
-        }
-      }
-    }
-    this._clusters = clusters.filter((c) => c.members.length > 1);
 
     this.simulation.force("geoX", null);
     this.simulation.force("geoY", null);
     this.simulation.force("charge").strength(-30);
     this.simulation.force("link").strength(0.05).distance(30);
     this.simulation.force("collide").radius((d) => d.r + this._settings().collisionPadding);
-    this.simulation.alpha(0.4).restart();
+    this.simulation.alpha(0.3).restart();
+    this._recomputeGeoClusters();
+    this._hideClusterPop();
+  }
+
+  // Cluster located nodes by screen-space proximity at the current zoom: tight
+  // groups (all of Marfa, all of NYC — or the whole US when zoomed out on a
+  // phone) collapse into one counted marker and split apart as you zoom in.
+  _recomputeGeoClusters() {
+    if (this.layout !== "geo") {
+      this._clusters = [];
+      this.gCluster.selectAll("*").remove();
+      return;
+    }
+    const located = this.nodes.filter(
+      (n) => n._px != null && this.activeTypes.has(n.type) && this._inTime(n) && this._inLayers(n)
+    );
+    for (const n of located) n._clustered = false;
+    const R = 46 / (this.k || 1); // ~46px on screen → base-projection space
+    const clusters = [];
+    for (const n of located) {
+      let c = clusters.find((k) => Math.hypot(k.sx - n._px, k.sy - n._py) <= R);
+      if (!c) {
+        c = { sx: n._px, sy: n._py, members: [] };
+        clusters.push(c);
+      }
+      c.members.push(n);
+    }
+    for (const c of clusters) {
+      c.x = c.members.reduce((s, m) => s + m._px, 0) / c.members.length;
+      c.y = c.members.reduce((s, m) => s + m._py, 0) / c.members.length;
+      if (c.members.length > 1) for (const m of c.members) m._clustered = true;
+    }
+    this._clusters = clusters.filter((c) => c.members.length > 1);
     this._renderClusters();
     this._applyVisibility();
-    this._hideClusterPop();
   }
 
   _renderClusters() {
     const sel = this.gCluster.selectAll("g.geo-cluster").data(this._clusters, (c, i) => i);
     sel.exit().remove();
     const enter = sel.enter().append("g").attr("class", "geo-cluster").style("cursor", "pointer");
+    enter.append("circle").attr("class", "geo-cluster-hit");
     enter.append("circle").attr("class", "geo-cluster-dot");
     enter.append("text").attr("class", "geo-cluster-count").attr("dy", "0.34em");
     const merged = enter.merge(sel);
+    merged.select(".geo-cluster-hit").attr("r", (c) => 13 + Math.min(7, c.members.length) + 12); // ≥ 44px touch target
     merged.select(".geo-cluster-dot").attr("r", (c) => 13 + Math.min(7, c.members.length));
     merged.select(".geo-cluster-count").text((c) => c.members.length);
     merged.on("click", (e, c) => {
@@ -553,7 +569,8 @@ export class Graph {
     pop.replaceChildren();
     const head = document.createElement("div");
     head.className = "gcp-head";
-    head.textContent = cluster.members[0].place || `${cluster.members.length} here`;
+    const places = new Set(cluster.members.map((m) => m.place).filter(Boolean));
+    head.textContent = places.size === 1 ? [...places][0] : `${cluster.members.length} in this area`;
     pop.appendChild(head);
     for (const m of cluster.members) {
       const item = document.createElement("button");
