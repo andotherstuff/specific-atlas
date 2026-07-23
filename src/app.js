@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=4";
-import { Graph } from "./graph.js?v=4";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=7";
+import { Graph } from "./graph.js?v=7";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=4";
+} from "./nostr.js?v=7";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];

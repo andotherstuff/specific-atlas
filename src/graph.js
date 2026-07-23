@@ -92,7 +92,27 @@ export class Graph {
       if (e.target === svg.node()) this.select(null);
     });
 
+    this._world = null; // basemap land (FeatureCollection), loaded async
+    this._borders = null; // internal country borders (mesh)
+    this._loadBasemap();
+
     this._render();
+  }
+
+  // Fetch a low-res world basemap so the geography view sits over real land that
+  // aligns with each place's coordinates. Degrades gracefully (points still show)
+  // if the CDN or topojson-client is unavailable.
+  async _loadBasemap() {
+    if (!window.topojson) return;
+    try {
+      const res = await fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json");
+      const topo = await res.json();
+      this._world = window.topojson.feature(topo, topo.objects.countries);
+      this._borders = window.topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
+      if (this.layout === "geo") this._geoLayout();
+    } catch {
+      /* no basemap — the projected points still render */
+    }
   }
 
   _id(value) {
@@ -382,6 +402,9 @@ export class Graph {
   }
 
   _visible(d) {
+    // The geography lens only shows things with a real location; abstract nodes
+    // (most people/ideas, and works without coordinates) can't sit on a map.
+    if (this.layout === "geo" && (d.lat == null || d.lon == null)) return false;
     return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d);
   }
 
@@ -403,6 +426,8 @@ export class Graph {
   _forceLayout() {
     const settings = this._settings();
     this.gMap.selectAll("*").remove();
+    this.simulation.force("geoX", null);
+    this.simulation.force("geoY", null);
     for (const n of this.nodes) {
       n.fx = null;
       n.fy = null;
@@ -414,6 +439,7 @@ export class Graph {
     this.simulation.force("charge").strength(settings.charge);
     this.simulation.force("collide").radius((d) => d.r + settings.collisionPadding);
     this.simulation.alpha(0.9).restart();
+    this._applyVisibility();
   }
 
   _geoLayout() {
@@ -431,49 +457,38 @@ export class Graph {
       .fitExtent([[pad, pad], [this.W - pad, this.H - pad]], fc);
     this.projection = projection;
 
-    // faint graticule-ish frame: draw the projected place markers' ghost grid
-    this.gMap.selectAll("*").remove();
-    this._drawMapHints(projection, geoNodes);
+    this._drawBasemap(projection);
 
+    // Fix located nodes at their real coordinates; only these are shown in geo
+    // mode (see _visible). A gentle collision keeps co-located places legible.
     for (const n of this.nodes) {
       if (n.lat != null && n.lon != null) {
         const [x, y] = projection([n.lon, n.lat]);
-        n.fx = x;
-        n.fy = y;
-        n.x = x;
-        n.y = y;
+        n.fx = x; n.fy = y; n.x = x; n.y = y;
       } else {
-        n.fx = null;
-        n.fy = null;
+        n.fx = null; n.fy = null;
       }
     }
-    // weaken global forces so undated/un-placed nodes hover near their anchors
-    this.simulation.force("charge").strength(-120);
-    this.simulation.force("link").strength(0.5).distance(46);
-    this.simulation.alpha(0.7).restart();
+    this.simulation.force("geoX", null);
+    this.simulation.force("geoY", null);
+    this.simulation.force("charge").strength(-30);
+    this.simulation.force("link").strength(0.05).distance(30);
+    this.simulation.force("collide").radius((d) => d.r + this._settings().collisionPadding);
+    this.simulation.alpha(0.5).restart();
+    this._applyVisibility();
   }
 
-  _drawMapHints(projection, geoNodes) {
-    // light lat/long crosshairs at each place + a soft label
+  // Draw the country basemap under the projected place nodes, using the same
+  // projection so land aligns with each place's real coordinates.
+  _drawBasemap(projection) {
     const g = this.gMap;
-    g.append("rect")
-      .attr("x", 0).attr("y", 0).attr("width", this.W).attr("height", this.H)
-      .attr("class", "geo-bg");
-    const grp = g
-      .selectAll("g.place-hint")
-      .data(geoNodes, (d) => d.id)
-      .join("g")
-      .attr("class", "place-hint")
-      .attr("transform", (d) => {
-        const [x, y] = projection([d.lon, d.lat]);
-        return `translate(${x},${y})`;
-      });
-    grp.append("line").attr("class", "cross").attr("x1", -9).attr("x2", 9);
-    grp.append("line").attr("class", "cross").attr("y1", -9).attr("y2", 9);
-    grp.append("text")
-      .attr("class", "place-coord")
-      .attr("dy", 18)
-      .text((d) => `${d.lat.toFixed(2)}, ${d.lon.toFixed(2)}`);
+    g.selectAll("*").remove();
+    if (!this._world || !window.d3) return;
+    const path = d3.geoPath(projection);
+    g.append("path").datum(this._world).attr("class", "geo-land").attr("d", path);
+    if (this._borders) {
+      g.append("path").datum(this._borders).attr("class", "geo-borders").attr("d", path);
+    }
   }
 
   resize() {

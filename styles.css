@@ -346,9 +346,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .node.hidden { display: none; }
 
 /* geo layer */
-.geo-bg { fill: rgba(122,203,215,0.05); }
-.place-hint .cross { stroke: var(--ink-faint); stroke-width: 1; stroke-opacity: 0.5; }
-.place-coord { fill: var(--ink-faint); font-family: var(--mono); font-size: 8.5px; text-anchor: middle; opacity: 0.6; }
+.geo-land { fill: var(--surface-3); stroke: none; }
+.geo-borders { fill: none; stroke: var(--line2); stroke-width: 0.6; stroke-opacity: 0.7; vector-effect: non-scaling-stroke; }
 
 /* ---------------- RIGHT PANEL ---------------- */
 #panel {
@@ -769,5 +768,4 @@ body.reviewing .mobile-fab { display: none; }
   .node.hub .node-label,
   .node.focus .node-label,
   .node.near .node-label { opacity: 1; }
-  .place-coord { display: none; }
 }
