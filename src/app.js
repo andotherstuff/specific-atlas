@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=12";
-import { Graph } from "./graph.js?v=12";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=13";
+import { Graph } from "./graph.js?v=13";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=12";
+} from "./nostr.js?v=13";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -1180,8 +1180,58 @@ const accountScrim = $("#account-scrim");
 const mType = $("#m-type");
 const mEdge = $("#m-edge");
 const idStatus = $("#id-status");
-const idCreated = $("#id-created");
+const accountReady = $("#account-ready");
+const identityBox = $("#identity-box");
 const accountDot = $("#account-dot");
+
+// Local accounts are persisted in this browser (just the nsec) so a "created"
+// account survives reloads instead of silently vanishing. Extension identities
+// aren't stored here — the extension holds their key.
+const IDENTITY_KEY = "atlas-identity-nsec";
+function saveIdentity(identity) {
+  try {
+    if (identity?.nsec) localStorage.setItem(IDENTITY_KEY, identity.nsec);
+    else localStorage.removeItem(IDENTITY_KEY);
+  } catch {
+    /* storage unavailable — stay session-only */
+  }
+}
+function restoreIdentity() {
+  let nsec = null;
+  try {
+    nsec = localStorage.getItem(IDENTITY_KEY);
+  } catch {
+    nsec = null;
+  }
+  if (!nsec) return false;
+  try {
+    currentIdentity = identityFromNsec(nsec);
+    return true;
+  } catch {
+    saveIdentity(null);
+    return false;
+  }
+}
+// Download the account key as a file — the only place the key leaves the app,
+// and only when the user explicitly asks to back it up (never shown on screen).
+function downloadBackup() {
+  if (!currentIdentity?.nsec) return;
+  const text =
+    "SPECIFIC ATLAS — account backup\n\n" +
+    "This is the private key to your account. Anyone who has it controls your\n" +
+    "account, so keep this file private. To sign in on another device, use\n" +
+    "\"Already have a key?\" and paste the line below.\n\n" +
+    currentIdentity.nsec + "\n";
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "specific-atlas-account-backup.txt";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  idStatus.textContent = "Backup downloaded — keep it somewhere safe.";
+}
 const accountLabel = $("#account-label");
 const accountSub = $("#account-sub");
 const accountAvatar = $("#account-avatar");
@@ -1236,6 +1286,10 @@ function renderIdentity() {
     accountModalName.textContent = "Not signed in";
     accountModalSub.textContent = "Sign in to propose nodes.";
     mobileAccount.textContent = "Sign in";
+    identityBox.hidden = false;
+    $("#id-divine").hidden = false;
+    $("#id-alt").hidden = false;
+    accountReady.hidden = true;
     renderProposalAccount();
     renderProposalQueue();
     return;
@@ -1251,6 +1305,10 @@ function renderIdentity() {
   mobileAccount.textContent = name;
   accountModalName.textContent = name;
   accountModalSub.textContent = detail;
+  identityBox.hidden = true;
+  $("#id-divine").hidden = true;
+  $("#id-alt").hidden = true;
+  accountReady.hidden = !currentIdentity.nsec; // backup only for accounts we hold the key for
   renderProposalAccount();
   renderProposalQueue();
 }
@@ -1307,8 +1365,7 @@ $("#id-ext").addEventListener("click", async () => {
   try {
     currentIdentity = await getExtensionIdentity();
     currentProfile = null;
-    idCreated.hidden = true;
-    idCreated.textContent = "";
+    saveIdentity(currentIdentity); // extension: clears any stored local key
     await refreshProfile();
     onIdentityChanged();
   } catch (err) {
@@ -1321,8 +1378,8 @@ $("#id-ext").addEventListener("click", async () => {
 $("#id-new").addEventListener("click", () => {
   currentIdentity = createLocalIdentity();
   currentProfile = null;
-  idCreated.hidden = false;
-  idCreated.textContent = `New account created. Save this key now; it is not stored by the app: ${currentIdentity.nsec}`;
+  saveIdentity(currentIdentity);
+  idStatus.textContent = "";
   refreshProfile();
   onIdentityChanged();
 });
@@ -1332,8 +1389,8 @@ $("#id-import").addEventListener("click", () => {
     currentIdentity = identityFromNsec($("#id-nsec").value);
     currentProfile = null;
     $("#id-nsec").value = "";
-    idCreated.hidden = true;
-    idCreated.textContent = "";
+    saveIdentity(currentIdentity);
+    idStatus.textContent = "";
     refreshProfile();
     onIdentityChanged();
   } catch (err) {
@@ -1341,12 +1398,14 @@ $("#id-import").addEventListener("click", () => {
   }
 });
 
+$("#id-backup").addEventListener("click", downloadBackup);
+
 $("#id-logout").addEventListener("click", () => {
   currentIdentity = null;
   currentProfile = null;
   $("#id-nsec").value = "";
-  idCreated.hidden = true;
-  idCreated.textContent = "";
+  saveIdentity(null);
+  idStatus.textContent = "";
   renderIdentity();
   onIdentityChanged();
 });
@@ -1401,4 +1460,9 @@ $("#m-publish").addEventListener("click", async () => {
   }
 });
 
+// Restore a previously-created/imported account saved in this browser.
+if (restoreIdentity()) {
+  refreshProfile();
+  onIdentityChanged();
+}
 renderIdentity();

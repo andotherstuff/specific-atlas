@@ -7,7 +7,7 @@
   <title>SPECIFIC ATLAS—An Atlas of Donald Judd</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='8' y='7' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='14' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='21' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://esm.sh" />
-  <link rel="stylesheet" href="./styles.css?v=12" />
+  <link rel="stylesheet" href="./styles.css?v=13" />
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 </head>
@@ -135,7 +135,7 @@
   <div id="account-scrim" hidden>
     <div id="account-modal">
       <h3>Account</h3>
-      <p class="modal-sub">Sign in to propose nodes. Your key is used only for this browser session and is never stored by the app.</p>
+      <p class="modal-sub">Sign in to propose nodes. New accounts are saved in this browser so you can come back — back yours up any time to keep it safe.</p>
       <div id="account-card" class="account-card">
         <span id="account-modal-avatar" class="account-avatar large"><span class="dot warn"></span></span>
         <span>
@@ -144,17 +144,19 @@
         </span>
       </div>
       <button id="id-divine" type="button" class="block primary" disabled>Sign in with Divine <span class="soon">soon</span></button>
-      <div class="id-alt">Or sign in another way</div>
+      <div class="id-alt" id="id-alt">Or sign in another way</div>
       <div id="identity-box">
-        <div class="id-row">
-          <button id="id-ext" type="button" class="ghost">Browser extension</button>
-          <button id="id-new" type="button" class="ghost">Create new account</button>
-        </div>
-        <label>Import a key<input id="id-nsec" type="password" placeholder="nsec…" autocomplete="off" /></label>
-        <button id="id-import" type="button" class="ghost block">Use this key for this session</button>
-        <p id="id-status" class="modal-status"></p>
-        <p id="id-created" class="secret-out" hidden></p>
+        <button id="id-new" type="button" class="block create">Create an account</button>
+        <button id="id-ext" type="button" class="ghost block">Use a browser extension</button>
+        <label>Already have a key?<input id="id-nsec" type="password" placeholder="Paste it (nsec…)" autocomplete="off" /></label>
+        <button id="id-import" type="button" class="ghost block">Sign in with this key</button>
       </div>
+      <div id="account-ready" hidden>
+        <p class="id-ready">✓ You're all set — your account is saved in this browser.</p>
+        <button id="id-backup" type="button" class="ghost block">Back up account</button>
+        <p class="micro">A backup lets you sign in on another device or recover your account. It's the only key to your account, so keep the file private.</p>
+      </div>
+      <p id="id-status" class="modal-status"></p>
       <div class="modal-actions">
         <button id="id-logout" class="ghost">Log out</button>
         <button id="account-close" class="ghost">Close</button>
@@ -183,6 +185,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=12"></script>
+  <script type="module" src="./src/app.js?v=13"></script>
 </body>
 </html>
