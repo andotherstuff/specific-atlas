@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=13";
-import { Graph } from "./graph.js?v=13";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=14";
+import { Graph } from "./graph.js?v=14";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=13";
+} from "./nostr.js?v=14";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -302,28 +302,88 @@ renderGeoList();
 // ---------------------------------------------------------------------------
 const searchEl = $("#search");
 const searchResults = $("#search-results");
+const SEARCH_LIMIT = 8;
+const SNIPPET_PAD = 60;
+
+// A query is matched term-by-term: every term must appear somewhere in the node,
+// so "aluminum works" finds the mill aluminum piece even though the words are
+// split across title and description.
+function scoreNode(n, terms) {
+  const title = n.title.toLowerCase();
+  const place = (n.place || "").toLowerCase();
+  const content = (n.content || "").toLowerCase();
+  let score = 0;
+  let contentTerm = null;
+  for (const t of terms) {
+    if (title.startsWith(t)) score += 100;
+    else if (title.includes(t)) score += 60;
+    else if (place.includes(t)) score += 30;
+    else if (content.includes(t)) {
+      score += 10;
+      // Snippet around the first term the title didn't already explain.
+      if (!contentTerm) contentTerm = t;
+    } else return null;
+  }
+  return { node: n, score, contentTerm };
+}
+
+// Description hits get a snippet so the match is visible—otherwise a result whose
+// title has nothing to do with the query reads as noise.
+function snippetFor(content, term) {
+  const at = content.toLowerCase().indexOf(term);
+  if (at < 0) return null;
+  let from = Math.max(0, at - SNIPPET_PAD);
+  let to = Math.min(content.length, at + term.length + SNIPPET_PAD);
+  // Don't slice mid-word.
+  if (from > 0) {
+    const space = content.indexOf(" ", from);
+    if (space > -1 && space < at) from = space + 1;
+  }
+  if (to < content.length) {
+    const space = content.lastIndexOf(" ", to);
+    if (space > at + term.length) to = space;
+  }
+  return {
+    before: (from > 0 ? "…" : "") + content.slice(from, at),
+    match: content.slice(at, at + term.length),
+    after: content.slice(at + term.length, to) + (to < content.length ? "…" : ""),
+  };
+}
+
 searchEl.addEventListener("input", () => {
-  const q = searchEl.value.trim().toLowerCase();
+  const terms = searchEl.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   searchResults.replaceChildren();
-  if (!q) return (searchResults.style.display = "none");
-  const hits = NODES.filter(
-    (n) =>
-      n.title.toLowerCase().includes(q) ||
-      (n.content || "").toLowerCase().includes(q) ||
-      (n.place || "").toLowerCase().includes(q)
-  ).slice(0, 8);
+  if (!terms.length) return (searchResults.style.display = "none");
+  const hits = NODES.map((n) => scoreNode(n, terms))
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.node.title.localeCompare(b.node.title))
+    .slice(0, SEARCH_LIMIT);
   if (!hits.length) {
     searchResults.style.display = "none";
     return;
   }
-  hits.forEach((n) => {
+  hits.forEach(({ node: n, contentTerm }) => {
     const d = document.createElement("div");
     d.className = "sr-item";
-    d.append(
+    const text = elem("div", "sr-text");
+    const head = elem("div", "sr-head");
+    head.append(
       dotSpan("sr-dot", typeDef(n.type).color),
       elem("span", "sr-title", n.title),
       elem("span", "sr-type", typeDef(n.type).label)
     );
+    text.appendChild(head);
+    const snip = contentTerm && snippetFor(n.content || "", contentTerm);
+    if (snip) {
+      const line = elem("div", "sr-snippet");
+      line.append(
+        document.createTextNode(snip.before),
+        elem("mark", "sr-mark", snip.match),
+        document.createTextNode(snip.after)
+      );
+      text.appendChild(line);
+    }
+    d.appendChild(text);
     d.addEventListener("click", () => {
       graph.select(n.id);
       graph.centerOn(n.id);

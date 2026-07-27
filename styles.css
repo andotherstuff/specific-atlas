@@ -303,9 +303,17 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .sr-item { display: flex; align-items: center; gap: 10px; padding: 11px 15px; cursor: pointer; border-top: 1px solid var(--line); }
 .sr-item:first-child { border-top: none; }
 .sr-item:hover { background: var(--hover); }
+.sr-text { flex: 1; min-width: 0; }
+.sr-head { display: flex; align-items: center; gap: 10px; }
 .sr-dot { width: 9px; height: 9px; background: var(--c); flex: none; }
 .sr-title { flex: 1; font-size: 13px; }
 .sr-type { font-size: 11px; color: var(--ink-faint); }
+/* description hit: show where the query landed, indented under the title */
+.sr-snippet {
+  margin: 4px 0 0 19px; font-size: 11.5px; line-height: 1.45; color: var(--ink-faint);
+  overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+.sr-mark { background: none; color: var(--accent-ink); font-weight: 500; }
 
 /* graph elements — vector-effect keeps edges hairline at any zoom (semantic zoom) */
 .link { stroke: var(--edge); stroke-width: 1; stroke-opacity: 0.18; vector-effect: non-scaling-stroke; }
