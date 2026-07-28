@@ -238,6 +238,7 @@ export class Graph {
           g.append("circle").attr("class", "node-hit");
           g.append("circle").attr("class", "node-dot");
           g.append("circle").attr("class", "node-ring").attr("fill", "none");
+          g.append("circle").attr("class", "note-pip");
           g.append("text").attr("class", "node-label").text((d) => d.title);
           return g;
         },
@@ -263,6 +264,13 @@ export class Graph {
     this.nodeSel.select(".node-hit").attr("r", (d) => Math.max(this._settings().hitRadius, d.r + 8));
     this.nodeSel.select(".node-dot").attr("r", (d) => d.r).attr("fill", (d) => this._typeDef(d.type).color);
     this.nodeSel.select(".node-ring").attr("r", (d) => d.r + 4);
+    // Small pip at the upper right of the dot, outside the focus ring.
+    this.nodeSel
+      .select(".note-pip")
+      .attr("r", 3)
+      .attr("cx", (d) => d.r * 0.78)
+      .attr("cy", (d) => -d.r * 0.78);
+    this.nodeSel.classed("noted", (d) => (this.notedIds || new Set()).has(d.id));
     const labels = this.nodeSel
       .select(".node-label")
       .attr("dy", (d) => -d.r - 6)
@@ -450,6 +458,22 @@ export class Graph {
     return this.activeLayers.has(layer);
   }
 
+  // Which nodes carry a private note. Kept as a class rather than baked into
+  // the node data so notes stay entirely a view concern, invisible to anything
+  // that publishes.
+  markNotes(idSet) {
+    this.notedIds = idSet || new Set();
+    if (this.nodeSel) this.nodeSel.classed("noted", (d) => this.notedIds.has(d.id));
+    if (this.notesOnly) this._applyVisibility(); // the filtered set just changed
+  }
+
+  // Narrow the graph to nodes the viewer has annotated. Orthogonal to the
+  // provenance layers: a note does not change who authored a record.
+  setNotesOnly(on) {
+    this.notesOnly = !!on;
+    this._applyVisibility();
+  }
+
   // Show only what sits within `hops` of the centre. null means no limit.
   setDepth(hops) {
     this.maxHops = hops;
@@ -477,7 +501,17 @@ export class Graph {
     // (most people/ideas, and works without coordinates) can't sit on a map.
     // Nodes folded into a cluster marker are hidden until the cluster is opened.
     if (this.layout === "geo" && (d.lat == null || d.lon == null || d._clustered)) return false;
-    return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d) && this._inDepth(d);
+    // "Only annotated" is a mode, not another filter in the stack. Someone
+    // asking to see their own notes means all of them: composing this with the
+    // layer, type and time filters hides notes the person just wrote, which
+    // reads as data loss rather than as filtering.
+    if (this.notesOnly) return (this.notedIds || new Set()).has(d.id);
+    return (
+      this.activeTypes.has(d.type) &&
+      this._inTime(d) &&
+      this._inLayers(d) &&
+      this._inDepth(d)
+    );
   }
 
   _applyVisibility() {

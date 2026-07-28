@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=21";
-import { Graph } from "./graph.js?v=21";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=25";
+import { Graph } from "./graph.js?v=25";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=21";
+} from "./nostr.js?v=25";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -86,6 +86,7 @@ const uiState = {
   railOpen: false,
   panelMode: "open", // desktop: open/collapsed; mobile: closed/peek/expanded
   layout: "force",
+  notesOnly: false,
   depthHops: null, // degrees-of-separation limit; declared here because the
                    // graph fires onVisibility from its constructor, before
                    // anything declared further down this file exists.
@@ -197,6 +198,108 @@ $$("#layout-toggle button").forEach((b) =>
     if (uiState.isMobile) setRailOpen(false);
   })
 );
+
+// ---------------------------------------------------------------------------
+// Private notes
+//
+// A researcher's own layer over the archive. Deliberately outside the Nostr
+// provenance model: notes are never signed, never published, and never leave
+// this browser. That is the opposite of every other record in the atlas, and it
+// is the point. Someone annotating an archive needs to be able to write "this
+// date looks wrong" without publishing it.
+//
+// The privacy claim is only as good as the storage, so it is stated plainly in
+// the UI: this browser, this machine, exportable on request. Do not move notes
+// to a relay without asking the person who wrote them.
+// ---------------------------------------------------------------------------
+const NOTES_KEY = "atlas.notes.v1";
+const NOTE_SAVE_DELAY = 400;
+// Say exactly what the storage does. Anything vaguer would be a promise the
+// code cannot keep, and this text is read aloud to participants.
+const NOTE_PRIVACY =
+  "Stays in this browser on this machine. Never published, never signed, not visible to anyone else. Export your notes to keep them.";
+
+function readNotes() {
+  try {
+    return JSON.parse(localStorage.getItem(NOTES_KEY) || "{}");
+  } catch {
+    return {}; // corrupt or unavailable storage should never break the panel
+  }
+}
+
+let notes = readNotes();
+
+function noteFor(id) {
+  return notes[id]?.text || "";
+}
+
+function hasNote(id) {
+  return Boolean(noteFor(id).trim());
+}
+
+function writeNote(id, text) {
+  const trimmed = text.trim();
+  if (trimmed) notes[id] = { text, updated: new Date().toISOString() };
+  else delete notes[id]; // an emptied note is a deleted note
+  try {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+  } catch {
+    return false; // private browsing, quota, or storage disabled
+  }
+  return true;
+}
+
+function noteCount() {
+  return Object.keys(notes).length;
+}
+
+// ---------------------------------------------------------------------------
+// Notes facet: count, an "only annotated" filter, and export.
+//
+// Export exists because the privacy promise makes the notes fragile by design.
+// If they only ever live in one browser, the person who wrote them needs a way
+// to walk away with them.
+// ---------------------------------------------------------------------------
+function refreshNoteFacet() {
+  const count = $("#note-count");
+  if (count) {
+    const n = noteCount();
+    count.textContent = n === 0 ? "none yet" : n === 1 ? "1 node" : `${n} nodes`;
+  }
+  const only = $("#notes-only");
+  if (only) only.classList.toggle("on", uiState.notesOnly);
+}
+
+$("#notes-only").addEventListener("click", () => {
+  uiState.notesOnly = !uiState.notesOnly;
+  graph.setNotesOnly(uiState.notesOnly);
+  refreshNoteFacet();
+  if (uiState.isMobile) setRailOpen(false);
+});
+
+graph.markNotes(new Set(Object.keys(notes)));
+refreshNoteFacet();
+
+$("#notes-export").addEventListener("click", () => {
+  const entries = Object.entries(notes);
+  if (!entries.length) return;
+  const lines = ["# Specific Atlas: my notes", ""];
+  for (const [id, note] of entries) {
+    const node = index.byId.get(id);
+    lines.push(`## ${node ? node.title : id}`);
+    if (node) lines.push(`${typeDef(node.type).label} · ${id}`);
+    lines.push("", note.text.trim(), "");
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "specific-atlas-notes.md";
+  a.click();
+  // Revoking in the same tick can cancel the download before the browser has
+  // read the blob. Let the click settle first.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+});
 
 // ---------------------------------------------------------------------------
 // Distance from the centre (degrees of separation)
@@ -448,6 +551,51 @@ document.addEventListener("click", (e) => {
   if (!$("#search-wrap").contains(e.target)) searchResults.style.display = "none";
 });
 
+
+// The note editor for one node. Saves on a debounce rather than behind a button
+// so nobody loses a thought to a missed click, and reports its own state
+// instead of saving silently: an annotation you are not sure was kept is worse
+// than no annotation.
+function noteSection(n) {
+  const section = elem("div", "p-section p-note");
+  const head = elem("h4", null, "My note");
+  const status = elem("span", "note-status", hasNote(n.id) ? "saved" : "");
+  head.appendChild(status);
+
+  const box = document.createElement("textarea");
+  box.className = "note-box";
+  box.rows = 4;
+  box.placeholder = "Anything you want to remember about this node.";
+  box.value = noteFor(n.id);
+
+  let timer = null;
+  const save = () => {
+    const ok = writeNote(n.id, box.value);
+    status.textContent = ok
+      ? box.value.trim()
+        ? "saved"
+        : ""
+      : "could not save in this browser";
+    status.classList.toggle("note-failed", !ok);
+    graph.markNotes(new Set(Object.keys(notes)));
+    refreshNoteFacet();
+  };
+  box.addEventListener("input", () => {
+    status.textContent = "…";
+    status.classList.remove("note-failed");
+    clearTimeout(timer);
+    timer = setTimeout(save, NOTE_SAVE_DELAY);
+  });
+  // A panel can be replaced mid-edit, so never rely on the debounce alone.
+  box.addEventListener("blur", () => {
+    clearTimeout(timer);
+    save();
+  });
+
+  section.append(head, box, elem("p", "note-privacy", NOTE_PRIVACY));
+  return section;
+}
+
 // ---------------------------------------------------------------------------
 // Detail panel
 // ---------------------------------------------------------------------------
@@ -527,6 +675,8 @@ function renderPanel(n) {
   }
   edgeSection.append(edgeHead, edgeList);
   body.append(edgeSection);
+
+  body.append(noteSection(n));
 
   const prov = elem("div", "p-section p-prov");
   prov.append(elem("h4", null, "Provenance"));
