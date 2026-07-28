@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=15";
-import { Graph } from "./graph.js?v=15";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=20";
+import { Graph } from "./graph.js?v=20";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=15";
+} from "./nostr.js?v=20";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -85,6 +85,10 @@ const uiState = {
   isMobile: mobileQuery.matches,
   railOpen: false,
   panelMode: "open", // desktop: open/collapsed; mobile: closed/peek/expanded
+  layout: "force",
+  depthHops: null, // degrees-of-separation limit; declared here because the
+                   // graph fires onVisibility from its constructor, before
+                   // anything declared further down this file exists.
 };
 let responsiveInitialized = false;
 
@@ -108,6 +112,7 @@ const graph = new Graph($("#graph"), {
     else if (uiState.isMobile) setPanelMode("closed");
     renderPanel(n ? index.byId.get(n.id) || n : null);
   },
+  onVisibility: (visible, total) => refreshDepthReadout(visible, total),
 });
 graph.setViewportMode(uiState.isMobile ? "mobile" : "desktop");
 window.addEventListener("resize", debounce(() => {
@@ -185,8 +190,45 @@ $$("#layout-toggle button").forEach((b) =>
     $$("#layout-toggle button").forEach((x) => x.classList.remove("on"));
     b.classList.add("on");
     const mode = b.dataset.layout;
+    uiState.layout = mode;
     graph.setLayout(mode);
     $("#geo-list-wrap").hidden = mode !== "geo";
+    graph.setDepth(uiState.depthHops); // re-apply so the readout recounts for this lens
+    if (uiState.isMobile) setRailOpen(false);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Distance from the centre (degrees of separation)
+//
+// The archivist's worry was that the atlas would collapse into a hub-and-spoke
+// diagram. This makes the rings explicit: 1 hop is everything Judd touched
+// directly, 2 hops the world behind those, and the readout names how much of
+// the atlas each ring accounts for — so "is this the right density?" becomes a
+// question you can answer by looking rather than by arguing.
+// ---------------------------------------------------------------------------
+// The count comes from the graph rather than from a hop test here, so it stays
+// honest about the layer, type and time filters this control knows nothing
+// about — otherwise "2 hops" reads "53 of 53" while 42 nodes are on screen.
+// Both the element and the state are looked up lazily / stored on uiState: the
+// graph fires this from its constructor, so anything declared below would still
+// be in the temporal dead zone.
+function refreshDepthReadout(visible, total) {
+  const el = $("#depth-readout");
+  if (!el) return;
+  const hops = uiState.depthHops;
+  if (hops == null) el.textContent = "from Judd";
+  // The geography lens folds co-located places into cluster markers, so a raw
+  // node count there reads as nonsense ("1 of 53"). Name the ring instead.
+  else if (uiState.layout === "geo") el.textContent = `within ${hops} hop${hops === 1 ? "" : "s"}`;
+  else el.textContent = `${visible} of ${total} shown`;
+}
+$$("#depth-toggle button").forEach((b) =>
+  b.addEventListener("click", () => {
+    $$("#depth-toggle button").forEach((x) => x.classList.remove("on"));
+    b.classList.add("on");
+    uiState.depthHops = b.dataset.hops ? Number(b.dataset.hops) : null;
+    graph.setDepth(uiState.depthHops); // fires onVisibility, refreshing the readout
     if (uiState.isMobile) setRailOpen(false);
   })
 );

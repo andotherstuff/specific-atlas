@@ -2,10 +2,13 @@
 const d3 = window.d3;
 
 export class Graph {
-  constructor(svgEl, { nodes, links, types, onSelect }) {
+  constructor(svgEl, { nodes, links, types, onSelect, onVisibility }) {
     this.svg = d3.select(svgEl);
     this.types = types;
     this.onSelect = onSelect || (() => {});
+    // Fires whenever the visible set changes, for readouts that would otherwise
+    // drift out of step with the filters they don't know about.
+    this.onVisibility = onVisibility || (() => {});
     this.layout = "force";
     this.viewportMode = "desktop";
     this.timeRange = null; // [start,end] or null
@@ -18,6 +21,7 @@ export class Graph {
 
     this.nodes = nodes;
     this.links = links.map((l) => ({ ...l }));
+    this.maxHops = null; // degrees-of-separation limit; null = show everything
 
     const box = svgEl.getBoundingClientRect();
     this.W = box.width || 900;
@@ -165,6 +169,35 @@ export class Graph {
       if (n.x == null) n.x = this.W / 2;
       if (n.y == null) n.y = this.H / 2;
     }
+    this._computeDepth();
+  }
+
+  // Degrees of separation from the centre, over the *whole* graph rather than
+  // the currently visible one — so hiding a type doesn't silently push the
+  // nodes behind it further away. Recomputed with the adjacency because
+  // proposals can add nodes and edges after load.
+  _computeDepth(rootId = "donald-judd") {
+    for (const n of this.nodes) n._depth = Infinity;
+    const byId = new Map(this.nodes.map((n) => [n.id, n]));
+    const root = byId.get(rootId);
+    if (!root) return;
+    root._depth = 0;
+    let ring = [rootId];
+    let depth = 0;
+    while (ring.length) {
+      depth++;
+      const next = [];
+      for (const id of ring) {
+        for (const neighbour of this.adj.get(id) || []) {
+          const node = byId.get(neighbour);
+          if (!node || node._depth !== Infinity) continue;
+          node._depth = depth;
+          next.push(neighbour);
+        }
+      }
+      ring = next;
+    }
+    this.maxDepth = Math.max(0, ...this.nodes.map((n) => (n._depth === Infinity ? 0 : n._depth)));
   }
 
   _render() {
@@ -417,6 +450,19 @@ export class Graph {
     return this.activeLayers.has(layer);
   }
 
+  // Show only what sits within `hops` of the centre. null means no limit.
+  setDepth(hops) {
+    this.maxHops = hops;
+    this._applyVisibility();
+  }
+
+  _inDepth(d) {
+    if (this.maxHops == null) return true;
+    // Unreachable nodes have no path to the centre at all, so they belong to
+    // no ring and stay out whenever a limit is set.
+    return d._depth <= this.maxHops;
+  }
+
   _inTime(d) {
     if (!this.timeRange) return true;
     const [a, b] = this.timeRange;
@@ -431,7 +477,7 @@ export class Graph {
     // (most people/ideas, and works without coordinates) can't sit on a map.
     // Nodes folded into a cluster marker are hidden until the cluster is opened.
     if (this.layout === "geo" && (d.lat == null || d.lon == null || d._clustered)) return false;
-    return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d);
+    return this.activeTypes.has(d.type) && this._inTime(d) && this._inLayers(d) && this._inDepth(d);
   }
 
   _applyVisibility() {
@@ -439,6 +485,7 @@ export class Graph {
     const vis = new Set(this.nodes.filter((d) => this._visible(d)).map((d) => d.id));
     this.linkSel.classed("hidden", (d) => !(vis.has(this._id(d.source)) && vis.has(this._id(d.target))));
     this._applyZoomDetail();
+    this.onVisibility(vis.size, this.nodes.length);
   }
 
   // ---- layouts ----------------------------------------------------------
