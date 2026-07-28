@@ -322,6 +322,93 @@ export const NODES = [
       "12 February 1994: Judd dies of lymphoma in New York at 65. He leaves behind not just objects but two preserved cities of them, a foundation to keep them fixed, and an argument about art that institutions are still catching up to.",
     edges: [["donald-judd", "ends"], ["judd-foundation", "two years before"], ["chinati", "leaves behind"]],
   },
+
+  // ---- DETECTED, UNREVIEWED --------------------------------------------
+  // Surfaced by tools/find-implicit-entities.mjs: every one of these was
+  // already named in the prose above without having a record of its own.
+  // They carry `unverified: true`, which puts them in their own layer, off by
+  // default, drawn hollow. NOTHING HERE IS FOUNDATION-VERIFIED — dates and
+  // relationships are drafted from general sources and are exactly what the
+  // archivist's review pass is for. Promote by deleting the flag.
+  //
+  // They also exist to fix a structural problem: before these were added, 37
+  // of 42 nodes sat one hop from Judd and the graph was a hub-and-spoke by
+  // construction. These attach to Columbia, Korea, the Green Gallery and
+  // Bernstein Brothers rather than to Judd, giving the atlas a second ring.
+  {
+    id: "soho", type: "place", title: "SoHo", start: 1962, end: 1994, unverified: true,
+    lat: 40.7233, lon: -74.0030, place: "New York",
+    content:
+      "The cast-iron manufacturing district south of Houston Street, largely emptied of industry by the 1960s and refilled by artists who wanted floor area and light. Judd was among the earliest to buy rather than rent. Named by six other nodes in this atlas and modelled by none of them until now: the neighbourhood is the reason 101 Spring Street was possible and affordable.",
+    edges: [["101-spring", "the district around"], ["nyc", "a district of"], ["moment-1968", "the setting for"]],
+  },
+  {
+    id: "art-students-league", type: "institution", title: "Art Students League", start: 1947, unverified: true,
+    lat: 40.7648, lon: -73.9808, place: "New York",
+    content:
+      "The independent New York art school where Judd studied after his army service and alongside his Columbia degrees. An unusual institution—no grades, no diplomas, students choosing their own instructors—and the practical counterweight to the art history he was reading uptown.",
+    edges: [["nyc", "taught in"], ["columbia", "studied alongside"]],
+  },
+  {
+    id: "meyer-schapiro", type: "person", title: "Meyer Schapiro", start: 1904, end: 1996, unverified: true,
+    lat: 40.8075, lon: -73.9626, place: "New York",
+    content:
+      "Art historian at Columbia, and one of the most influential lecturers of his generation. His teaching connected medieval and modern work through structure rather than chronology—an argument about how to look that runs underneath Judd's later insistence on the thing as a whole.",
+    edges: [["columbia", "taught at"]],
+  },
+  {
+    id: "rudolf-wittkower", type: "person", title: "Rudolf Wittkower", start: 1901, end: 1971, unverified: true,
+    lat: 40.8075, lon: -73.9626, place: "New York",
+    content:
+      "Architectural historian at Columbia, known for reading Renaissance buildings as systems of proportion and mathematical relation rather than as style. The habit of seeing a building as a set of ratios is not far from the arithmetic of the Progressions.",
+    edges: [["columbia", "taught at"]],
+  },
+  {
+    id: "army-corps", type: "institution", title: "U.S. Army Corps of Engineers", unverified: true,
+    content:
+      "The engineering branch Judd served with in occupied Korea in 1946–47. Named in this atlas only in passing, though it is the institution that first put him in a world of surveying, drawing and building to specification—and, separately, the builder of the West Texas fort he would later fill with art.",
+    edges: [["korea", "posted Judd to"], ["fort-russell", "built"]],
+  },
+  {
+    id: "fort-russell", type: "place", title: "Fort D.A. Russell", start: 1911, end: 1946, unverified: true,
+    lat: 30.2930, lon: -104.0300, place: "Marfa, Texas",
+    content:
+      "The army post on the edge of Marfa, decommissioned after the Second World War and left as a set of artillery sheds and barracks on open grassland. Its architecture—repeating bays, long unbroken runs of building—is the reason the aluminium works could be installed the way they were. Judd did not build these spaces; he found them.",
+    edges: [["chinati", "became"], ["marfa", "sits at the edge of"]],
+  },
+  {
+    id: "richard-bellamy", type: "person", title: "Richard Bellamy", start: 1927, end: 1998, unverified: true,
+    lat: 40.7616, lon: -73.9719, place: "New York",
+    content:
+      "The dealer who ran the Green Gallery and showed a generation of artists before the market knew what to do with them. Operating on almost no capital and an unusual eye, he gave Judd's objects a room at the moment they stopped being paintings.",
+    edges: [["green-gallery", "directed"]],
+  },
+  {
+    id: "judson-dance", type: "institution", title: "Judson Dance Theater", start: 1962, end: 1964, unverified: true,
+    lat: 40.7301, lon: -73.9987, place: "New York",
+    content:
+      "The loose company working out of Judson Memorial Church that stripped dance of narrative and virtuosity, treating ordinary movement as sufficient material. The parallel to what Judd was doing with objects in the same city in the same years is close enough that the two scenes are hard to tell apart as arguments.",
+    edges: [["yvonne-rainer", "founded in part by"], ["nyc", "worked in"]],
+  },
+  {
+    id: "long-island-city", type: "place", title: "Long Island City", unverified: true,
+    lat: 40.7447, lon: -73.9485, place: "New York",
+    content:
+      "The industrial quarter of Queens where Bernstein Brothers kept their sheet-metal shop. The works were not made in a studio; they were made here, to drawings, by people whose names are largely absent from the literature.",
+    edges: [["bernstein-brothers", "workshop in"]],
+  },
+  {
+    id: "sol-lewitt", type: "person", title: "Sol LeWitt", start: 1928, end: 2007, unverified: true,
+    content:
+      "Artist whose serial structures and instruction-based wall drawings put the idea before the hand. Named in this atlas only inside the description of Minimalism—a movement he, like Judd, is filed under and did not choose.",
+    edges: [["minimalism", "filed under"]],
+  },
+  {
+    id: "robert-morris", type: "person", title: "Robert Morris", start: 1931, end: 2018, unverified: true,
+    content:
+      "Artist and writer whose plywood polyhedra and 'Notes on Sculpture' made the viewer's body and position part of the work—a reading of the object that Judd's own writing argued against even as the two were grouped together.",
+    edges: [["minimalism", "filed under"]],
+  },
 ];
 
 // Build a fast lookup + reciprocal adjacency for traversal in the UI.

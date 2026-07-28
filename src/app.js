@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=14";
-import { Graph } from "./graph.js?v=14";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=15";
+import { Graph } from "./graph.js?v=15";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=14";
+} from "./nostr.js?v=15";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -68,6 +68,14 @@ function safeNpubShort(author) {
 // ---------------------------------------------------------------------------
 const index = buildIndex(NODES);
 NODES.forEach((node) => {
+  // Entities the detector surfaced from prose are candidates, not archive.
+  // They must never inherit the Foundation's authority just by living in the
+  // same file, so they get their own layer, state, and no author at all.
+  if (node.unverified) {
+    node._state = "detected";
+    node._layer = "detected";
+    return;
+  }
   node._author = FOUNDATION_PK;
   node._state = "curated";
 });
@@ -488,12 +496,16 @@ function renderPanel(n) {
       ? "prov-down"
       : n._state === "proposed"
       ? "prov-live"
+      : n._state === "detected"
+      ? "prov-detected"
       : "prov-local";
   const stateText =
     n._state === "confirmed"
       ? "● Sealed base · Judd"
       : n._state === "accepted"
       ? "● Archivist-approved contribution"
+      : n._state === "detected"
+      ? "○ Detected in existing text · unverified, awaiting review"
       : n._state === "proposed"
       ? "● Pending archivist review"
       : n._state === "rejected"
@@ -506,7 +518,10 @@ function renderPanel(n) {
   function addDef(term, value, className) {
     dl.append(elem("dt", null, term), elem("dd", className, value));
   }
-  addDef("added by", `${isArchive ? "Judd Atlas" : "contributor"} · ${safeNpubShort(author)}`, "mono");
+  // A detected candidate has no author — nobody has vouched for it yet, and
+  // signing it "Judd Atlas" would lend it exactly the authority it lacks.
+  if (n._state === "detected") addDef("added by", "machine detection · unsigned", "mono");
+  else addDef("added by", `${isArchive ? "Judd Atlas" : "contributor"} · ${safeNpubShort(author)}`, "mono");
   addDef("identifier", n.id, "mono");
   if (ev) addDef("fingerprint", `${ev.id.slice(0, 16)}…`, "mono");
   prov.append(state, dl);
@@ -1080,9 +1095,12 @@ routeReview();
 const LAYERS = [
   { key: "canonical", label: "Canonical", auth: false },
   { key: "approved", label: "Approved additions", auth: false },
+  { key: "detected", label: "Detected — unreviewed", auth: false },
   { key: "mine", label: "My proposals", auth: true },
   { key: "following", label: "People I follow", auth: true },
 ];
+// "detected" is deliberately off by default: machine-surfaced candidates are
+// opt-in, so the atlas still opens as the archive rather than as a worklist.
 const activeLayers = new Set(["canonical", "approved"]);
 let currentFollows = new Set();
 let mutedPubkeys = new Set(); // archivist's NIP-51 mute list

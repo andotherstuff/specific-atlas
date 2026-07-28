@@ -222,6 +222,11 @@ export class Graph {
       .call(drag);
 
     this.nodeSel.classed("hub", (d) => d.id === "donald-judd");
+    // Machine-surfaced candidates read as outlines, not filled records, so an
+    // unverified node is never mistaken for archive at a glance.
+    this.nodeSel
+      .classed("detected", (d) => d._layer === "detected")
+      .style("--c", (d) => this._typeDef(d.type).color); // lets CSS stroke in the type colour
     this.nodeSel.select(".node-hit").attr("r", (d) => Math.max(this._settings().hitRadius, d.r + 8));
     this.nodeSel.select(".node-dot").attr("r", (d) => d.r).attr("fill", (d) => this._typeDef(d.type).color);
     this.nodeSel.select(".node-ring").attr("r", (d) => d.r + 4);
