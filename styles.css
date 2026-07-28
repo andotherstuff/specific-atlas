@@ -1,5 +1,5 @@
 /* ============================================================================
-   SPECIFIC ATLAS — Judd Foundation theme, system-reactive (light + dark)
+   SPECIFIC ATLAS. Judd Foundation theme, system-reactive (light + dark)
    Black Helvetica on white. Flat, rectilinear, generous whitespace. A single
    restrained cyan accent. Every color is a token; the dark palette below is a
    pure variable swap driven by the OS via prefers-color-scheme.
@@ -22,7 +22,7 @@
   --node-stroke: rgba(0,0,0,0.12);
   --scrim: rgba(0,0,0,0.28);  /* modal backdrop */
   --shadow: rgba(0,0,0,0.32);
-  --accent: #7acbd7;          /* Judd cyan — focus/selection/active */
+  --accent: #7acbd7;          /* Judd cyan, used for focus/selection/active */
   --accent-ink: #2c7d8a;      /* cyan for text/links/rings against the ground */
   --ok: #3f7a4a;              /* status: connected */
   --down: #b23b2f;            /* status: error */
@@ -42,7 +42,7 @@
     --ink-faint: #827e73;
     --line: #2a2820;
     --line2: #3b392f;
-    --border-strong: #6d685c; /* a visible mid line — pure white would glare */
+    --border-strong: #6d685c; /* a visible mid line; pure white would glare */
     --hover: rgba(255,255,255,0.05);
     --edge: #ffffff;
     --node-stroke: rgba(0,0,0,0.35);
@@ -124,7 +124,7 @@ body {
 }
 .facet h2 .hint { font-size: 10px; letter-spacing: 0.06em; text-transform: none; color: var(--ink-faint); font-weight: 400; }
 
-/* segmented control — ink/paper inversion for the active tab (flips per mode) */
+/* segmented control: ink/paper inversion for the active tab (flips per mode) */
 .seg { display: flex; border: 1px solid var(--border-strong); overflow: hidden; }
 .seg button {
   flex: 1; background: transparent; border: none; color: var(--ink);
@@ -315,7 +315,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .sr-mark { background: none; color: var(--accent-ink); font-weight: 500; }
 
-/* graph elements — vector-effect keeps edges hairline at any zoom (semantic zoom) */
+/* graph elements. vector-effect keeps edges hairline at any zoom (semantic zoom) */
 .link { stroke: var(--edge); stroke-width: 1; stroke-opacity: 0.18; vector-effect: non-scaling-stroke; }
 .link.active { stroke: var(--accent-ink); stroke-opacity: 0.9; stroke-width: 1.4; }
 .link.faded { stroke-opacity: 0.05; }

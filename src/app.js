@@ -1,5 +1,5 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=20";
-import { Graph } from "./graph.js?v=20";
+import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=21";
+import { Graph } from "./graph.js?v=21";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +22,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=20";
+} from "./nostr.js?v=21";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -204,12 +204,12 @@ $$("#layout-toggle button").forEach((b) =>
 // The archivist's worry was that the atlas would collapse into a hub-and-spoke
 // diagram. This makes the rings explicit: 1 hop is everything Judd touched
 // directly, 2 hops the world behind those, and the readout names how much of
-// the atlas each ring accounts for — so "is this the right density?" becomes a
+// the atlas each ring accounts for, so "is this the right density?" becomes a
 // question you can answer by looking rather than by arguing.
 // ---------------------------------------------------------------------------
 // The count comes from the graph rather than from a hop test here, so it stays
 // honest about the layer, type and time filters this control knows nothing
-// about — otherwise "2 hops" reads "53 of 53" while 42 nodes are on screen.
+// about. Otherwise "2 hops" reads "53 of 53" while 42 nodes are on screen.
 // Both the element and the state are looked up lazily / stored on uiState: the
 // graph fires this from its constructor, so anything declared below would still
 // be in the temporal dead zone.
@@ -377,7 +377,7 @@ function scoreNode(n, terms) {
   return { node: n, score, contentTerm };
 }
 
-// Description hits get a snippet so the match is visible—otherwise a result whose
+// Description hits get a snippet so the match is visible. Otherwise a result whose
 // title has nothing to do with the query reads as noise.
 function snippetFor(content, term) {
   const at = content.toLowerCase().indexOf(term);
@@ -560,7 +560,7 @@ function renderPanel(n) {
   function addDef(term, value, className) {
     dl.append(elem("dt", null, term), elem("dd", className, value));
   }
-  // A detected candidate has no author — nobody has vouched for it yet, and
+  // A detected candidate has no author. Nobody has vouched for it yet, and
   // signing it "Judd Atlas" would lend it exactly the authority it lacks.
   if (n._state === "detected") addDef("added by", "machine detection · unsigned", "mono");
   else addDef("added by", `${isArchive ? "Judd Atlas" : "contributor"} · ${safeNpubShort(author)}`, "mono");
@@ -579,7 +579,7 @@ function renderPanel(n) {
 
 // ---------------------------------------------------------------------------
 // Lifecycle: connect → read → seed missing → live subscribe.
-// Relay/network status is deliberately not surfaced to viewers — the protocol
+// Relay/network status is deliberately not surfaced to viewers. The protocol
 // is not the point. The client still tracks it internally for its own use.
 // ---------------------------------------------------------------------------
 const client = new AtlasClient();
@@ -601,7 +601,7 @@ function registerNode(node, state = "live") {
 // A canonical archive node: either the sealed Judd seed (author = FOUNDATION_PK,
 // layer "canonical") or an archivist-curated addition (author in
 // ARCHIVIST_PUBKEYS, layer "approved", crediting a proposer). If a node with this
-// id already exists — a seed node, or the original proposal now being approved —
+// id already exists (a seed node, or the original proposal now being approved),
 // adopt the archive's (possibly edited) content over it so the published version
 // wins everywhere, including on the proposer's own screen.
 function registerArchiveNode(node) {
@@ -695,7 +695,7 @@ function renderProposalQueue() {
   if (!list || !count) return;
   list.replaceChildren();
   // A proposal is visible in the sidebar ONLY to its author and that author's
-  // followers — the same rule as the graph. Everyone else (signed-out visitors,
+  // followers, the same rule as the graph. Everyone else (signed-out visitors,
   // and the archivist browsing the rail) sees nothing here; the archivist works
   // the full backlog from the dedicated review queue instead. Approved proposals
   // have graduated to the graph, so they drop off this list too.
@@ -725,7 +725,7 @@ function renderProposalQueue() {
     );
     const actions = elem("div", "proposal-actions");
     // Archivists moderate from the dedicated review queue, not this rail list.
-    // The author can withdraw their own proposal (NIP-09) — used to clean up
+    // The author can withdraw their own proposal (NIP-09), used to clean up
     // test/junk proposals. Relays only honor deletions from the signing pubkey.
     if (currentIdentity && entry.event.pubkey === currentIdentity.pubkey) {
       const withdraw = elem("button", "proposal-withdraw", "Withdraw");
@@ -794,7 +794,7 @@ async function undoModeration(entry) {
 }
 
 // ---------------------------------------------------------------------------
-// Archivist review queue — a dedicated screen, shown only to archivist keys.
+// Archivist review queue: a dedicated screen, shown only to archivist keys.
 // Gating here is convenience: proposals are public and the real authority is
 // the signature on the moderation event. The queue reads every fetched proposal
 // (not just graph-visible ones), so the archivist sees the whole backlog.
@@ -846,7 +846,7 @@ function openReview() {
 }
 
 // The review queue is a real page at #review, gated to archivist keys. Client-
-// side gating is convenience — proposals are public — but only the archivist
+// side gating is convenience, since proposals are public, but only the archivist
 // signature approves. Non-archivists (or signed-out) are bounced to the atlas.
 function routeReview() {
   const wantReview = location.hash === "#review";
@@ -916,7 +916,7 @@ function renderReviewSection(title, entries, emptyText) {
       reviewList.append(reviewCard(entry));
     } else if (shown === RATE_CAP) {
       const total = entries.filter((e) => e.event.pubkey === pk).length;
-      reviewList.append(elem("div", "review-more", `+${total - RATE_CAP} more from ${contributorName(pk)} — possible flooding`));
+      reviewList.append(elem("div", "review-more", `+${total - RATE_CAP} more from ${contributorName(pk)} (possible flooding)`));
     }
     perKey.set(pk, shown + 1);
   }
@@ -1094,7 +1094,7 @@ function openRejectForm(card, entry) {
   const form = elem("div", "reject-form");
   const ta = document.createElement("textarea");
   ta.rows = 2;
-  ta.placeholder = "Optional reason — shown to the contributor";
+  ta.placeholder = "Optional reason, shown to the contributor";
   const row = elem("div", "reject-form-actions");
   const confirm = elem("button", "review-reject", "Confirm decline");
   const cancel = elem("button", null, "Cancel");
@@ -1122,7 +1122,7 @@ window.addEventListener("hashchange", routeReview);
 routeReview();
 
 // ---------------------------------------------------------------------------
-// Provenance layers — what the viewer sees in the graph.
+// Provenance layers: what the viewer sees in the graph.
 //
 //   canonical  the sealed Judd base + archive-confirmed nodes (everyone)
 //   approved   contributor proposals an archivist approved (everyone)
@@ -1131,13 +1131,13 @@ routeReview();
 //
 // Visibility is client-side curation, not privacy: the events are public. A
 // pending/rejected proposal is shown iff the viewer authored it or follows the
-// author — computed from the viewer's own follow set, never by enumerating a
+// author, computed from the viewer's own follow set, never by enumerating a
 // proposer's followers.
 // ---------------------------------------------------------------------------
 const LAYERS = [
   { key: "canonical", label: "Canonical", auth: false },
   { key: "approved", label: "Approved additions", auth: false },
-  { key: "detected", label: "Detected — unreviewed", auth: false },
+  { key: "detected", label: "Detected, unreviewed", auth: false },
   { key: "mine", label: "My proposals", auth: true },
   { key: "following", label: "People I follow", auth: true },
 ];
@@ -1306,14 +1306,14 @@ const accountDot = $("#account-dot");
 
 // Local accounts are persisted in this browser (just the nsec) so a "created"
 // account survives reloads instead of silently vanishing. Extension identities
-// aren't stored here — the extension holds their key.
+// aren't stored here. The extension holds their key.
 const IDENTITY_KEY = "atlas-identity-nsec";
 function saveIdentity(identity) {
   try {
     if (identity?.nsec) localStorage.setItem(IDENTITY_KEY, identity.nsec);
     else localStorage.removeItem(IDENTITY_KEY);
   } catch {
-    /* storage unavailable — stay session-only */
+    /* storage unavailable, stay session-only */
   }
 }
 function restoreIdentity() {
@@ -1332,12 +1332,12 @@ function restoreIdentity() {
     return false;
   }
 }
-// Download the account key as a file — the only place the key leaves the app,
+// Download the account key as a file. This is the only place the key leaves the app,
 // and only when the user explicitly asks to back it up (never shown on screen).
 function downloadBackup() {
   if (!currentIdentity?.nsec) return;
   const text =
-    "SPECIFIC ATLAS — account backup\n\n" +
+    "SPECIFIC ATLAS account backup\n\n" +
     "This is the private key to your account. Anyone who has it controls your\n" +
     "account, so keep this file private. To sign in on another device, use\n" +
     "\"Already have a key?\" and paste the line below.\n\n" +
@@ -1350,7 +1350,7 @@ function downloadBackup() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  idStatus.textContent = "Backup downloaded — keep it somewhere safe.";
+  idStatus.textContent = "Backup downloaded. Keep it somewhere safe.";
 }
 const accountLabel = $("#account-label");
 const accountSub = $("#account-sub");
@@ -1571,7 +1571,7 @@ $("#m-publish").addEventListener("click", async () => {
     const res = await client.publish(signed);
     upsertProposal(signed);
     $("#m-status").textContent =
-      res.ok > 0 ? "proposal submitted for archivist review" : "couldn't reach the network — proposal not submitted";
+      res.ok > 0 ? "proposal submitted for archivist review" : "couldn't reach the network, proposal not submitted";
     setTimeout(() => {
       scrim.hidden = true;
     }, 850);

@@ -5,7 +5,7 @@
 // The Judd Foundation archivist described a specific failure in their own
 // systems: some important things exist only as metadata, tags, or recurring
 // references, never as formal records. Casa Perez and the US Army were the
-// examples given. This script tests that claim against the atlas's own prose —
+// examples given. This script tests that claim against the atlas's own prose.
 // it reads every node's description and `place` field, pulls out proper nouns,
 // and reports the ones that have no node of their own.
 //
@@ -40,14 +40,14 @@ const NOT_ENTITIES = new Set([
 
 // Sentence splitting must not fire inside "Fort D.A. Russell", so initialism
 // dots are swapped for a sentinel up front and restored at the end. Written as
-// an escape, never a literal — an invisible character in source is a trap.
+// an escape, never a literal. An invisible character in source is a trap.
 const DOT = "\uE000";
 const protect = (s) => s.replace(/\b([A-Z])\.(?=[A-Z]\.|\s*[A-Z])/g, `$1${DOT}`);
 const restore = (s) => s.replaceAll(DOT, ".");
 
 const POSSESSIVE = /'s$/;
 // Run-ending punctuation, tested against a token with only *leading* punctuation
-// removed — stripping the tail first would eat the very comma that proves
+// removed. Stripping the tail first would eat the very comma that proves
 // "Marfa, Texas" is two names rather than one.
 const BREAKS = /[,;:.!?"'”’)\]]$/;
 
@@ -104,7 +104,7 @@ const flatten = (s) =>
 const TITLES = NODES.map((n) => ({ title: n.title, flat: flatten(n.title) }));
 
 // Resolve a partial name to the node it refers to: exact title first, then the
-// SHORTEST title containing it. Shortest matters — "Chinati" must land on
+// SHORTEST title containing it. Shortest matters, because "Chinati" must land on
 // Chinati Foundation, not The Block (La Mansana de Chinati), and "Judd" on
 // Donald Judd rather than Judd Foundation. Genuine ambiguity is reported
 // rather than hidden, because choosing between candidates is the archivist's
@@ -151,14 +151,14 @@ const byCount = (a, b) => b.count - a.count || a.phrase.localeCompare(b.phrase);
 unmodelled.sort(byCount);
 aliases.sort(byCount);
 
-console.log(`\nUNMODELLED ENTITIES — named in ${NODES.length} nodes, no node of their own\n`);
+console.log(`\nUNMODELLED ENTITIES: named in ${NODES.length} nodes, no node of their own\n`);
 for (const r of unmodelled) {
   console.log(`  ${String(r.count).padStart(2)} node(s)  ${r.phrase}`);
   console.log(`             via: ${r.nodes.join(", ")}`);
 }
 
 const realAliases = aliases.filter((r) => flatten(r.phrase) !== flatten(r.match));
-console.log(`\n\nALIAS FORMS — partial names for nodes that DO exist`);
+console.log(`\n\nALIAS FORMS: partial names for nodes that DO exist`);
 console.log(`(each is a controlled-vocabulary decision, not a parser bug)\n`);
 for (const r of realAliases) {
   const ambiguous = r.candidates.length > 1 ? `   [ambiguous: also ${r.candidates.slice(1).join("; ")}]` : "";

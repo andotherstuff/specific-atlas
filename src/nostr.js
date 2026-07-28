@@ -12,30 +12,30 @@ import {
 } from "https://esm.sh/nostr-tools@2.10.4";
 
 // ---------------------------------------------------------------------------
-// Identity. Only public keys live here — never an nsec or other private key.
+// Identity. Only public keys live here, never an nsec or other private key.
 //
 // Two distinct roles, deliberately NOT the same key:
 //
-//   JUDD (foundational key) — authors the canonical seed nodes (kind 31987).
+//   JUDD (foundational key) authors the canonical seed nodes (kind 31987).
 //   Once seeding is complete this key is BURNED: the seed becomes a frozen,
 //   tamper-evident base layer that no one can ever alter or extend. Because it
 //   can never rotate, the burned key doubles as the permanent *namespace* for
-//   the atlas — every proposal tags `proposal-for: FOUNDATION_PK` to say "this
+//   the atlas. Every proposal tags `proposal-for: FOUNDATION_PK` to say "this
 //   belongs to the Judd atlas." That is an identifier, not a signer, so burning
 //   the key does not orphan anything.
 //
-//   ARCHIVIST(S) — a SEPARATE authority that reviews proposals and signs
+//   ARCHIVIST(S): a SEPARATE authority that reviews proposals and signs
 //   approve/reject moderation votes (kind 31989). Rotatable and threshold-based;
 //   lives entirely in ARCHIVIST_PUBKEYS below. On approval the archivist edits
 //   the proposal and re-publishes it as its own curated NODE_KIND event (see
-//   buildCuratedNodeEvent), crediting the proposer — like a maintainer merging a
+//   buildCuratedNodeEvent), crediting the proposer, like a maintainer merging a
 //   PR with edits. Judd (burned) never re-signs anything.
 // ---------------------------------------------------------------------------
 export const JUDD_NPUB =
   "npub1wm4ez7ludz9cfatn84gxrnmsaxjf9kz04xrysmelqyulgzv7ws4skl6f8m";
 export const FOUNDATION_PK = nip19.decode(JUDD_NPUB).data;
 
-// The archivist authority — distinct from Judd. Add rotated/additional archivist
+// The archivist authority, distinct from Judd. Add rotated/additional archivist
 // npubs here; approval is threshold-based and signed by these identities. Do not
 // add nsecs. (Interim key; will move to keycast/NIP-46 remote signing later.)
 export const ARCHIVIST_NPUBS = [
@@ -67,7 +67,7 @@ export const RELAYS = [
 ];
 
 // Profile lookups (kind 0) need indexer/aggregator relays, not the content
-// relays above — a user's metadata usually lives on their own relays. purplepag.es
+// relays above. A user's metadata usually lives on their own relays. purplepag.es
 // and nostr.band aggregate kind-0 for essentially every npub. Content relays are
 // kept as a fallback in case the profile happens to be there too.
 export const PROFILE_RELAYS = [
@@ -143,7 +143,7 @@ export function buildProposalEvent(node) {
   };
 }
 
-// NIP-09 deletion request. Lets an author withdraw their own event(s) — e.g. a
+// NIP-09 deletion request. Lets an author withdraw their own event(s), for example a
 // proposal they no longer want in the queue. Relays that honor NIP-09 drop the
 // referenced events, but only when the deletion is signed by the same pubkey
 // that authored them. Includes `k` (kind) and, for addressable events, the `a`
@@ -383,7 +383,7 @@ export async function getExtensionIdentity() {
     throw new Error("No browser signer found. Install a signer extension, or use another sign-in method.");
   }
   // Even once window.nostr exists, the extension's background service worker may
-  // be asleep on first use — the first getPublicKey() then rejects with
+  // be asleep on first use. The first getPublicKey() then rejects with
   // "Could not establish connection", which is why a second click "worked."
   // That first call wakes the worker, so retry a few times before giving up.
   let lastErr;

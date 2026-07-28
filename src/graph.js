@@ -132,7 +132,7 @@ export class Graph {
       this._borders = window.topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
       if (this.layout === "geo") this._geoLayout();
     } catch {
-      /* no basemap — the projected points still render */
+      /* no basemap, but the projected points still render */
     }
   }
 
@@ -173,7 +173,7 @@ export class Graph {
   }
 
   // Degrees of separation from the centre, over the *whole* graph rather than
-  // the currently visible one — so hiding a type doesn't silently push the
+  // the currently visible one, so hiding a type doesn't silently push the
   // nodes behind it further away. Recomputed with the adjacency because
   // proposals can add nodes and edges after load.
   _computeDepth(rootId = "donald-judd") {
@@ -319,7 +319,7 @@ export class Graph {
   // to least important, a label is shown only if its box has room in screen
   // space; the rest are dimmed. Because zoom spreads node *positions* apart
   // (while label size is constant), zooming in frees space and more labels fade
-  // in — the disclosure is driven by the zoom itself.
+  // in. The disclosure is driven by the zoom itself.
   _labelPriority(d) {
     return d.id === "donald-judd" ? Infinity : d.deg;
   }
@@ -564,7 +564,7 @@ export class Graph {
   }
 
   // Cluster located nodes by screen-space proximity at the current zoom: tight
-  // groups (all of Marfa, all of NYC — or the whole US when zoomed out on a
+  // groups (all of Marfa, all of NYC, or the whole US when zoomed out on a
   // phone) collapse into one counted marker and split apart as you zoom in.
   _recomputeGeoClusters() {
     if (this.layout !== "geo") {

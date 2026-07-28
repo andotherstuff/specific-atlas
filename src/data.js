@@ -3,18 +3,18 @@
 // node as ["edge", targetId, relation] tags. Facts checked against Judd
 // Foundation / Chinati / Wikipedia chronologies (see project notes).
 
-// Restrained, desaturated "Marfa desert" palette—muted enough to stay
+// Restrained, desaturated "Marfa desert" palette, muted enough to stay
 // editorial on the white ground, distinct enough that type stays scannable.
 // Works is the Judd Foundation cyan itself; People carry a muted gold so the
 // central Judd hub reads warm; Institutions take an adobe clay-tan (the Marfa
 // association) rather than a redder terracotta.
 export const TYPES = {
-  person:      { label: "People",       color: "#d8b24b", glyph: "person" },  // lighter, yellower gold—pulls away from the adobe clay
+  person:      { label: "People",       color: "#d8b24b", glyph: "person" },  // lighter, yellower gold, pulls away from the adobe clay
   work:        { label: "Works",        color: "#7acbd7", glyph: "work" },
-  place:       { label: "Places",       color: "#8a9065", glyph: "place" },  // Pantone 5773 C—desert sage (Marfa / Chihuahuan Desert)
+  place:       { label: "Places",       color: "#8a9065", glyph: "place" },  // Pantone 5773 C, desert sage (Marfa / Chihuahuan Desert)
   concept:     { label: "Ideas",        color: "#6b4a6e", glyph: "concept" },
   institution: { label: "Institutions", color: "#b08560", glyph: "institution" },
-  event:       { label: "Moments",      color: "#b2ac9e", glyph: "event" },  // light warm greige—neutral, separates from the sage green
+  event:       { label: "Moments",      color: "#b2ac9e", glyph: "event" },  // light warm greige, neutral, separates from the sage green
 };
 
 // type order for legend / z-stacking
@@ -327,7 +327,7 @@ export const NODES = [
   // Surfaced by tools/find-implicit-entities.mjs: every one of these was
   // already named in the prose above without having a record of its own.
   // They carry `unverified: true`, which puts them in their own layer, off by
-  // default, drawn hollow. NOTHING HERE IS FOUNDATION-VERIFIED — dates and
+  // default, drawn hollow. NOTHING HERE IS FOUNDATION-VERIFIED. Dates and
   // relationships are drafted from general sources and are exactly what the
   // archivist's review pass is for. Promote by deleting the flag.
   //

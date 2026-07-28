@@ -7,7 +7,7 @@
   <title>SPECIFIC ATLAS—An Atlas of Donald Judd</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='8' y='7' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='14' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='21' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://esm.sh" />
-  <link rel="stylesheet" href="./styles.css?v=20" />
+  <link rel="stylesheet" href="./styles.css?v=21" />
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 </head>
@@ -92,7 +92,7 @@
       <svg id="graph"></svg>
       <div id="stage-overlay">
         <div id="search-wrap">
-          <input id="search" type="text" placeholder="Search the atlas—people, works, places, ideas…" autocomplete="off" />
+          <input id="search" type="text" placeholder="Search the atlas: people, works, places, ideas…" autocomplete="off" />
           <div id="search-results"></div>
         </div>
       </div>
@@ -104,7 +104,7 @@
       <button id="panel-close" class="panel-toggle" type="button" aria-label="Close detail panel">×</button>
       <div id="panel-empty">
         <h3>The thing as a whole</h3>
-        <p>Donald Judd refused illusion. A work was not a picture <em>of</em> something—it was a specific object, a real thing in real space.</p>
+        <p>Donald Judd refused illusion. A work was not a picture <em>of</em> something. It was a specific object, a real thing in real space.</p>
         <p>This atlas treats his life the same way: people, works, places, and ideas as discrete objects, each one a signed record you can trace to whoever added it. Pull a node to read it; follow its edges to travel time, geography, and thought.</p>
         <p class="cue">↖ Select any node to begin.</p>
       </div>
@@ -144,7 +144,7 @@
   <div id="account-scrim" hidden>
     <div id="account-modal">
       <h3>Account</h3>
-      <p class="modal-sub">Sign in to propose nodes. New accounts are saved in this browser so you can come back — back yours up any time to keep it safe.</p>
+      <p class="modal-sub">Sign in to propose nodes. New accounts are saved in this browser so you can come back. Back yours up any time to keep it safe.</p>
       <div id="account-card" class="account-card">
         <span id="account-modal-avatar" class="account-avatar large"><span class="dot warn"></span></span>
         <span>
@@ -161,7 +161,7 @@
         <button id="id-import" type="button" class="ghost block">Sign in with this key</button>
       </div>
       <div id="account-ready" hidden>
-        <p class="id-ready">✓ You're all set — your account is saved in this browser.</p>
+        <p class="id-ready">✓ You're all set. Your account is saved in this browser.</p>
         <button id="id-backup" type="button" class="ghost block">Back up account</button>
         <p class="micro">A backup lets you sign in on another device or recover your account. It's the only key to your account, so keep the file private.</p>
       </div>
@@ -194,6 +194,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=20"></script>
+  <script type="module" src="./src/app.js?v=21"></script>
 </body>
 </html>
