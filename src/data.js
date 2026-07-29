@@ -28,26 +28,26 @@ export const NODES = [
     content:
       "Donald Clarence Judd (1928–1994). Painter turned critic turned maker of what he called specific objects—real things in real space, not pictures of anything. He rejected illusion, composition, and the word 'Minimalism' that the world insisted on using for him. Over three decades he moved art off the wall, out of the gallery, and finally into permanent installation across two cities he reshaped to his standard: a cast-iron building in SoHo and a former army fort in the West Texas desert.",
     edges: [
-      ["specific-objects", "wrote the founding text of"],
-      ["minimalism", "was labeled with—and refused"],
-      ["stacks", "made"],
-      ["progressions", "made"],
-      ["101-spring", "bought and inhabited"],
-      ["marfa", "remade"],
-      ["chinati", "founded"],
-      ["julie-finch", "married"],
-      ["flavin-judd", "father of"],
-      ["rainer-judd", "father of"],
-      ["marianne-stockebrand", "companion of"],
+      ["specific-objects", "wrote the founding text of", { from: 1965 }],
+      ["minimalism", "was labeled with—and refused", { from: 1965 }],
+      ["stacks", "made", { from: 1965 }],
+      ["progressions", "made", { from: 1964 }],
+      ["101-spring", "bought and inhabited", { from: 1968 }],
+      ["marfa", "remade", { from: 1971 }],
+      ["chinati", "founded", { from: 1986 }],
+      ["julie-finch", "married", { from: 1964, to: 1978 }],
+      ["flavin-judd", "father of", { from: 1968 }],
+      ["rainer-judd", "father of", { from: 1970 }],
+      ["marianne-stockebrand", "companion of", { from: 1990, to: 1994 }],
       ["dan-flavin", "close friend of"],
       ["frank-stella", "ally of"],
       ["john-chamberlain", "collaborator with"],
       ["barnett-newman", "admired"],
-      ["leo-castelli", "represented by"],
-      ["green-gallery", "broke through at"],
-      ["arts-magazine", "wrote criticism for"],
-      ["judd-furniture", "designed"],
-      ["color", "spent late career on"],
+      ["leo-castelli", "represented by", { from: 1966 }],
+      ["green-gallery", "broke through at", { from: 1963 }],
+      ["arts-magazine", "wrote criticism for", { from: 1959, to: 1965 }],
+      ["judd-furniture", "designed", { from: 1973 }],
+      ["color", "spent late career on", { from: 1984 }],
     ],
   },
 
@@ -140,6 +140,7 @@ export const NODES = [
   },
   {
     id: "untitled-aluminum", type: "work", title: "100 untitled works in mill aluminum", start: 1982, end: 1986,
+    url: "https://juddfoundation.org/art/untitled-35/",
     lat: 30.293, lon: -104.030, place: "Chinati, Marfa",
     content:
       "One hundred aluminum boxes, each 41 × 51 × 72 inches on the outside, every interior different. They fill two converted artillery sheds at Chinati, walls reglazed in continuous windows. Light moves across them through the day until the metal seems to dissolve into the desert behind the glass. Judd's supreme demonstration that sameness of container makes difference visible.",
@@ -178,14 +179,14 @@ export const NODES = [
     lat: 37.55, lon: 126.99, place: "Korea",
     content:
       "Judd served in the U.S. Army Corps of Engineers in occupied Korea, 1946–47, before the war. The engineering discipline—drawings, tolerances, things built to spec by other hands—prefigured how he would one day make art: by specification, fabricated industrially.",
-    edges: [["donald-judd", "shaped"], ["industrial-fabrication", "foreshadowed"]],
+    edges: [["donald-judd", "shaped", { from: 1946 }], ["industrial-fabrication", "foreshadowed", { from: 1946 }]],
   },
   {
     id: "columbia", type: "institution", title: "Columbia University", start: 1948, end: 1962,
     lat: 40.8075, lon: -73.9626, place: "New York",
     content:
       "Judd took a philosophy degree (1953) and studied art history at Columbia under Meyer Schapiro and Rudolf Wittkower, while learning to paint at the Art Students League. Philosophy gave him the habit of first principles; art history gave him enemies to argue with.",
-    edges: [["donald-judd", "educated"], ["nyc", "in"]],
+    edges: [["donald-judd", "educated", { from: 1948 }], ["nyc", "in"]],
   },
   {
     id: "nyc", type: "place", title: "New York City", start: 1948,
@@ -206,7 +207,7 @@ export const NODES = [
     lat: 30.3094, lon: -104.0207, place: "West Texas",
     content:
       "A high-desert ranching town near the Mexican border. Judd first leased buildings here in 1971 and moved permanently in 1977, acquiring an army fort, ranch land, and half a downtown—all to install art at the scale and permanence galleries could never give. He turned a remote town into a destination and a discipline.",
-    edges: [["donald-judd", "remade by"], ["chinati", "contains"], ["the-block", "contains"], ["untitled-concrete", "holds"], ["permanent-installation", "realized at"]],
+    edges: [["donald-judd", "remade by", { from: 1971 }], ["chinati", "contains", { from: 1986 }], ["the-block", "contains", { from: 1973 }], ["untitled-concrete", "holds", { from: 1980 }], ["permanent-installation", "realized at", { from: 1971 }]],
   },
   {
     id: "the-block", type: "place", title: "The Block (La Mansana de Chinati)", start: 1973, end: 1994,
@@ -222,7 +223,7 @@ export const NODES = [
     lat: 30.2930, lon: -104.0300, place: "Marfa, Texas",
     content:
       "Founded by Judd in 1986 on the former Fort D.A. Russell, Chinati exists for one radical idea: large-scale work installed permanently, in spaces designed for it, in dialogue with the land. It holds Judd's 100 aluminum and 15 concrete works alongside permanent installations by Flavin, Chamberlain, and others—a museum that refuses to rotate.",
-    edges: [["donald-judd", "founded by"], ["untitled-aluminum", "holds"], ["untitled-concrete", "holds"], ["dan-flavin", "holds work by"], ["john-chamberlain", "holds work by"], ["permanent-installation", "institutionalizes"], ["dia", "split from"]],
+    edges: [["donald-judd", "founded by", { from: 1986 }], ["untitled-aluminum", "holds"], ["untitled-concrete", "holds"], ["dan-flavin", "holds work by"], ["john-chamberlain", "holds work by"], ["permanent-installation", "institutionalizes"], ["dia", "split from", { from: 1979, to: 1986 }]],
   },
   {
     id: "judd-foundation", type: "institution", title: "Judd Foundation", start: 1996,
@@ -241,7 +242,7 @@ export const NODES = [
     id: "dia", type: "institution", title: "Dia Art Foundation", start: 1979, end: 1986,
     content:
       "The foundation that first funded Judd's Marfa ambitions, underwriting the army-fort acquisition and the aluminum installations from 1979. When Dia's support faltered in the mid-1980s, Judd broke away and founded Chinati to secure the work permanently—independence bought at the price of a patron.",
-    edges: [["chinati", "preceded"], ["marfa", "funded work in"], ["donald-judd", "patron of"]],
+    edges: [["chinati", "preceded"], ["marfa", "funded work in"], ["donald-judd", "patron of", { from: 1979, to: 1986 }]],
   },
   {
     id: "arts-magazine", type: "institution", title: "Arts Magazine", start: 1959, end: 1965,
@@ -273,7 +274,7 @@ export const NODES = [
     id: "industrial-fabrication", type: "concept", title: "Industrial Fabrication", start: 1964,
     content:
       "Judd did not make his objects by hand; he specified them, and metalworkers built them. The decision removed the artist's touch and the aura of craft, letting the idea and the material stand without a maker's signature. The fabricator was a collaborator, the drawing a score.",
-    edges: [["bernstein-brothers", "carried out by"], ["stacks", "produces"], ["donald-judd", "method of"], ["anti-illusion", "supports"]],
+    edges: [["bernstein-brothers", "carried out by", { from: 1964 }], ["stacks", "produces", { from: 1965 }], ["donald-judd", "method of"], ["anti-illusion", "supports"]],
   },
   {
     id: "wholeness", type: "concept", title: "Wholeness", start: 1965,
@@ -291,7 +292,7 @@ export const NODES = [
     id: "color", type: "concept", title: "Color", start: 1984, end: 1994,
     content:
       "Color was Judd's last great problem. In his final decade he made works in dozens of saturated hues—enameled aluminum, colored Plexiglas—treating color as a material with structure, not decoration. The late color works argue that even color can be specific: a fact, not an effect.",
-    edges: [["donald-judd", "late pursuit of"], ["stacks", "applied in"], ["industrial-fabrication", "realized through"]],
+    edges: [["donald-judd", "late pursuit of", { from: 1984 }], ["stacks", "applied in", { from: 1984 }], ["industrial-fabrication", "realized through"]],
   },
 
   // ---- A few connective nodes ------------------------------------------
@@ -340,68 +341,149 @@ export const NODES = [
     lat: 40.7233, lon: -74.0030, place: "New York",
     content:
       "The cast-iron manufacturing district south of Houston Street, largely emptied of industry by the 1960s and refilled by artists who wanted floor area and light. Judd was among the earliest to buy rather than rent. Named by six other nodes in this atlas and modelled by none of them until now: the neighbourhood is the reason 101 Spring Street was possible and affordable.",
-    edges: [["101-spring", "the district around"], ["nyc", "a district of"], ["moment-1968", "the setting for"]],
+    edges: [["101-spring", "the district around", { from: 1968 }], ["nyc", "a district of"], ["moment-1968", "the setting for", { from: 1968 }]],
   },
   {
     id: "art-students-league", type: "institution", title: "Art Students League", start: 1947, unverified: true,
     lat: 40.7648, lon: -73.9808, place: "New York",
     content:
       "The independent New York art school where Judd studied after his army service and alongside his Columbia degrees. An unusual institution—no grades, no diplomas, students choosing their own instructors—and the practical counterweight to the art history he was reading uptown.",
-    edges: [["nyc", "taught in"], ["columbia", "studied alongside"]],
+    edges: [["nyc", "taught in"], ["columbia", "studied alongside", { from: 1948 }]],
   },
   {
     id: "meyer-schapiro", type: "person", title: "Meyer Schapiro", start: 1904, end: 1996, unverified: true,
     lat: 40.8075, lon: -73.9626, place: "New York",
     content:
       "Art historian at Columbia, and one of the most influential lecturers of his generation. His teaching connected medieval and modern work through structure rather than chronology—an argument about how to look that runs underneath Judd's later insistence on the thing as a whole.",
-    edges: [["columbia", "taught at"]],
+    edges: [["columbia", "taught at", { from: 1948, to: 1962, precision: "circa" }]],
   },
   {
     id: "rudolf-wittkower", type: "person", title: "Rudolf Wittkower", start: 1901, end: 1971, unverified: true,
     lat: 40.8075, lon: -73.9626, place: "New York",
     content:
       "Architectural historian at Columbia, known for reading Renaissance buildings as systems of proportion and mathematical relation rather than as style. The habit of seeing a building as a set of ratios is not far from the arithmetic of the Progressions.",
-    edges: [["columbia", "taught at"]],
+    edges: [["columbia", "taught at", { from: 1948, to: 1962, precision: "circa" }]],
   },
   {
     id: "army-corps", type: "institution", title: "U.S. Army Corps of Engineers", unverified: true,
     content:
       "The engineering branch Judd served with in occupied Korea in 1946–47. Named in this atlas only in passing, though it is the institution that first put him in a world of surveying, drawing and building to specification—and, separately, the builder of the West Texas fort he would later fill with art.",
-    edges: [["korea", "posted Judd to"], ["fort-russell", "built"]],
+    edges: [["korea", "posted Judd to", { from: 1946, to: 1947 }], ["fort-russell", "built", { from: 1911, to: 1946 }]],
   },
   {
     id: "fort-russell", type: "place", title: "Fort D.A. Russell", start: 1911, end: 1946, unverified: true,
     lat: 30.2930, lon: -104.0300, place: "Marfa, Texas",
     content:
       "The army post on the edge of Marfa, decommissioned after the Second World War and left as a set of artillery sheds and barracks on open grassland. Its architecture—repeating bays, long unbroken runs of building—is the reason the aluminium works could be installed the way they were. Judd did not build these spaces; he found them.",
-    edges: [["chinati", "became"], ["marfa", "sits at the edge of"]],
+    edges: [["chinati", "became", { from: 1979 }], ["marfa", "sits at the edge of", { from: 1911 }]],
   },
   {
     id: "richard-bellamy", type: "person", title: "Richard Bellamy", start: 1927, end: 1998, unverified: true,
     lat: 40.7616, lon: -73.9719, place: "New York",
     content:
       "The dealer who ran the Green Gallery and showed a generation of artists before the market knew what to do with them. Operating on almost no capital and an unusual eye, he gave Judd's objects a room at the moment they stopped being paintings.",
-    edges: [["green-gallery", "directed"]],
+    edges: [["green-gallery", "directed", { from: 1960, to: 1965 }]],
   },
   {
     id: "judson-dance", type: "institution", title: "Judson Dance Theater", start: 1962, end: 1964, unverified: true,
     lat: 40.7301, lon: -73.9987, place: "New York",
     content:
       "The loose company working out of Judson Memorial Church that stripped dance of narrative and virtuosity, treating ordinary movement as sufficient material. The parallel to what Judd was doing with objects in the same city in the same years is close enough that the two scenes are hard to tell apart as arguments.",
-    edges: [["yvonne-rainer", "founded in part by"], ["nyc", "worked in"]],
+    edges: [["yvonne-rainer", "founded in part by", { from: 1962, to: 1964 }], ["nyc", "worked in"]],
   },
   {
     id: "long-island-city", type: "place", title: "Long Island City", unverified: true,
     lat: 40.7447, lon: -73.9485, place: "New York",
     content:
       "The industrial quarter of Queens where Bernstein Brothers kept their sheet-metal shop. The works were not made in a studio; they were made here, to drawings, by people whose names are largely absent from the literature.",
-    edges: [["bernstein-brothers", "workshop in"]],
+    edges: [["bernstein-brothers", "workshop in", { from: 1964 }]],
   },
   {
     id: "sol-lewitt", type: "person", title: "Sol LeWitt", start: 1928, end: 2007, unverified: true,
     content:
       "Artist whose serial structures and instruction-based wall drawings put the idea before the hand. Named in this atlas only inside the description of Minimalism—a movement he, like Judd, is filed under and did not choose.",
     edges: [["minimalism", "filed under"]],
+  },
+  // ---- FROM juddfoundation.org/donald-judd/art/ -------------------------
+  // Facts only: titles, dates, media, dimensions, holding institutions and
+  // publication details as listed on the Foundation's own art index. The
+  // descriptive text below is written here rather than copied, both because
+  // their prose is theirs and because unattributed Foundation writing sitting
+  // in this file would misstate its provenance. Content is deliberately thin:
+  // a listing page supports facts, not interpretation.
+  //
+  // These matter structurally as well. Holding institutions attach to works
+  // rather than to Judd, so they extend the second ring instead of adding more
+  // spokes to the hub. Woodblocks and editions also open two practice areas the
+  // atlas had no representation of at all.
+  {
+    id: "untitled-1972-copper", type: "work", title: "Untitled, 1972", start: 1972, unverified: true,
+    url: "https://juddfoundation.org/art/untitled-25/",
+    source: "juddfoundation.org",
+    content:
+      "Copper, enamel and aluminium, 36 by 60 by 60 inches. Held by Tate, London. One of the copper works in which the box becomes a container for colour held on its inner surfaces.",
+    edges: [
+      ["donald-judd", "made by", { from: 1972 }],
+      ["tate", "held by"],
+      ["color", "carries"],
+    ],
+  },
+  {
+    id: "woodblocks", type: "work", title: "Woodblocks", start: 1960, unverified: true,
+    url: "https://juddfoundation.org/donald-judd/art/",
+    source: "juddfoundation.org",
+    content:
+      "Judd worked in woodblock alongside the paintings and objects. The Foundation's catalogue raisonné treats paintings, objects and woodblocks 1960 to 1974 as one body, which places printmaking inside the practice rather than beside it.",
+    edges: [
+      ["donald-judd", "made by", { from: 1960 }],
+      ["catalogue-raisonne", "documented in", { from: 1975 }],
+      ["seriality", "worked through"],
+    ],
+  },
+  {
+    id: "prints-editions", type: "work", title: "Prints & Works in Editions", start: 1993, unverified: true,
+    url: "https://juddfoundation.org/donald-judd/art/",
+    source: "juddfoundation.org",
+    content:
+      "Prints and works made in editions, documented in a 1993 volume published by Edition Schellmann and Schirmer/Mosel. Editions sit oddly against permanent installation: the same refusal of the unique gesture, arrived at from the opposite direction.",
+    edges: [
+      ["donald-judd", "made by"],
+      ["woodblocks", "includes"],
+    ],
+  },
+  {
+    id: "catalogue-raisonne", type: "work", title: "Catalogue Raisonné 1960–1974", start: 1975, unverified: true,
+    url: "https://juddfoundation.org/donald-judd/art/",
+    source: "juddfoundation.org",
+    content:
+      "Donald Judd: Catalogue Raisonné of Paintings, Objects, and Wood-Blocks 1960–1974, published by the National Gallery of Canada in 1975. The scholarly apparatus the atlas is explicitly not trying to reproduce, and which it should point at instead.",
+    // Deliberately not edged straight to Judd. A catalogue raisonné documents
+    // the work, and the work connects to the man. Routing it through the
+    // objects rather than shortcutting to the hub is both more accurate and
+    // the first thing in this atlas to sit three hops out.
+    edges: [["national-gallery-canada", "published by", { from: 1975 }]],
+  },
+  {
+    id: "tate", type: "institution", title: "Tate", unverified: true,
+    source: "juddfoundation.org",
+    lat: 51.4911, lon: -0.1278, place: "London",
+    content: "London. Holds Untitled, 1972, in copper, enamel and aluminium.",
+    edges: [],
+  },
+  {
+    id: "moma", type: "institution", title: "Museum of Modern Art", unverified: true,
+    source: "juddfoundation.org",
+    lat: 40.7614, lon: -73.9776, place: "New York",
+    content: "New York. Among the institutions holding Judd's work listed on the Foundation's art index.",
+    edges: [["nyc", "sits in"]],
+  },
+  {
+    id: "national-gallery-canada", type: "institution", title: "National Gallery of Canada", unverified: true,
+    source: "juddfoundation.org",
+    lat: 45.4295, lon: -75.6989, place: "Ottawa",
+    content:
+      "Ottawa. Publisher of the 1975 catalogue raisonné covering the paintings, objects and woodblocks of 1960 to 1974.",
+    edges: [],
   },
   {
     id: "robert-morris", type: "person", title: "Robert Morris", start: 1931, end: 2018, unverified: true,
@@ -417,9 +499,9 @@ export function buildIndex(nodes) {
   const links = [];
   const adj = new Map(nodes.map((n) => [n.id, new Set()]));
   for (const n of nodes) {
-    for (const [target, relation] of n.edges || []) {
+    for (const [target, relation, when] of n.edges || []) {
       if (!byId.has(target)) continue;
-      links.push({ source: n.id, target, relation });
+      links.push({ source: n.id, target, relation, when: when || null });
       adj.get(n.id).add(target);
       adj.get(target).add(n.id);
     }
@@ -427,6 +509,161 @@ export function buildIndex(nodes) {
   return { byId, links, adj };
 }
 
-// The full time span the atlas covers.
-export const TIME_MIN = 1905;
-export const TIME_MAX = 2020;
+// ---------------------------------------------------------------------------
+// Salience over time
+//
+// The Foundation's framing: a relationship is not a timeless attribute. Judd's
+// interest in architecture becomes meaningful after Korea, not at birth. And an
+// idea can persist for decades while its prominence rises and falls, so
+// existence and salience are two different signals.
+//
+// Salience here is DERIVED, never asserted. A concept's prominence in a given
+// year is a function of how much dated evidence sits near that year: the works,
+// writings and events actually connected to it. Hand-authoring a curve that
+// says colour mattered most in 1985 would be exactly the interpretive hierarchy
+// the Foundation asked us to avoid. Letting the dated record speak is a claim
+// anyone can check, and it corrects itself when the data improves.
+// ---------------------------------------------------------------------------
+
+// Evidence a few years either side still counts, with linear falloff. Without
+// this the curves step rather than move, and stepping cannot be read as
+// emphasis coming forward and receding.
+const SALIENCE_WINDOW = 3;
+
+// Point in time versus interval. A missing `end` means two different things in
+// this data: a Moment is a point (the Green Gallery show happened in 1963 and
+// then was over), while everything else runs on (Industrial Fabrication begins
+// in 1964 and never stops). Type stands in for that distinction here; a proper
+// schema would carry it explicitly rather than inferring it.
+function activeSpan(node) {
+  const s = node.start != null ? node.start : node.end;
+  if (s == null) return null;
+  if (node.end != null) return [s, node.end];
+  return node.type === "event" ? [s, s] : [s, TIME_MAX];
+}
+
+// How strongly one dated node counts as evidence at `year`: full weight inside
+// its own span, tapering across the window on either side.
+function weightAt(node, year) {
+  const span = activeSpan(node);
+  if (!span) return 0;
+  const [s, e] = span;
+  if (year >= s && year <= e) return 1;
+  const gap = year < s ? s - year : year - e;
+  return gap > SALIENCE_WINDOW ? 0 : 1 - gap / (SALIENCE_WINDOW + 1);
+}
+
+// How much one dated node's presence says about a particular year. A work made
+// in 1965 is a sharp claim about 1965. A person being alive from 1936 to 2024
+// is barely a claim about any year in it: Frank Stella existing in 1948 is not
+// evidence that anything about Judd and Stella mattered in 1948. Short spans
+// therefore count for much more per year than long ones.
+function specificity(node) {
+  const span = activeSpan(node);
+  if (!span) return 0;
+  return 1 / (1 + (span[1] - span[0]) / 10);
+}
+
+// Raw evidence weight for one node in one year: itself, if dated, plus every
+// dated neighbour reachable by a relationship that exists yet. An undated
+// concept like Wholeness scores entirely through the works and writings that
+// carry it, which is the point.
+function rawSalience(node, year, byId, neighbours) {
+  // Nothing is prominent before it exists. Without this gate a node borrows
+  // salience from its neighbours in years it has not reached: Judd Foundation,
+  // which begins in 1996, read as fully salient in 1975 because 101 Spring
+  // Street and his children were already active. Gate on the start only, not
+  // the end, since a work that is finished goes on existing and the objects
+  // outlast the making.
+  const span = activeSpan(node);
+  if (span && year < span[0]) return 0;
+
+  let total = weightAt(node, year) * specificity(node);
+  for (const { id, when } of neighbours.get(node.id) || []) {
+    if (!edgeActiveAt(when, year)) continue; // the relationship has not formed
+    const other = byId.get(id);
+    if (other) total += weightAt(other, year) * specificity(other);
+  }
+  return total;
+}
+
+// Precompute a normalised curve per node across the whole span.
+//
+// Normalisation is GLOBAL rather than per node. Per-node scaling would make
+// every node peak at 1.0 at some point, which reads as "everything is equally
+// important eventually" and destroys the comparison the Foundation actually
+// described: colour and anti-illusionism both persist, but one comes to the
+// fore. A square root keeps thinly evidenced nodes visible without letting the
+// densest ones flatten everything else.
+export function buildSalience(nodes, links, min = TIME_MIN, max = TIME_MAX) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  // Adjacency that carries edge time, so a relationship can be skipped in years
+  // before it forms. The plain `adj` map from buildIndex drops that.
+  const neighbours = new Map(nodes.map((n) => [n.id, []]));
+  for (const l of links) {
+    neighbours.get(l.source)?.push({ id: l.target, when: l.when });
+    neighbours.get(l.target)?.push({ id: l.source, when: l.when });
+  }
+  const curves = new Map();
+  const all = [];
+  for (const n of nodes) {
+    const curve = new Float32Array(max - min + 1);
+    for (let y = min; y <= max; y++) {
+      const v = rawSalience(n, y, byId, neighbours);
+      curve[y - min] = v;
+      if (v > 0) all.push(v);
+    }
+    curves.set(n.id, curve);
+  }
+  // Scale against a high percentile, not the maximum. Judd himself carries
+  // twenty edges and would otherwise set the ceiling on his own, squashing
+  // every other node into a narrow dim band where no change is legible. The
+  // hub clamps to 1 instead, which is the right answer for the centre anyway.
+  all.sort((a, b) => a - b);
+  const ceiling = all.length ? all[Math.floor(all.length * 0.92)] : 0;
+  if (ceiling > 0) {
+    for (const curve of curves.values()) {
+      for (let i = 0; i < curve.length; i++) {
+        curve[i] = Math.min(1, Math.sqrt(curve[i] / ceiling));
+      }
+    }
+  }
+  return {
+    at(id, year) {
+      const curve = curves.get(id);
+      if (!curve) return 0;
+      const i = Math.round(year) - min;
+      return i < 0 || i >= curve.length ? 0 : curve[i];
+    },
+    curve: (id) => curves.get(id),
+  };
+}
+
+// Whether a relationship exists yet at `year`. An edge with no `when` is
+// timeless and always present, which keeps every un-annotated edge working.
+export function edgeActiveAt(when, year) {
+  if (!when) return true;
+  if (when.from != null && year < when.from) return false;
+  if (when.to != null && year > when.to) return false;
+  return true;
+}
+
+// The full span the atlas covers, which is deliberately wider than the life.
+// The old 1905 to 2020 bounds clipped real data at both ends: Rudolf Wittkower
+// is born in 1901, and Frank Stella and Carl Andre both died in 2024.
+//
+// Three zones live on this one track. Before 1928 is what Judd inherits: his
+// Columbia teachers, Newman, Castelli, and Fort D.A. Russell already standing
+// empty since 1911. After 1994 is the afterlife: Chinati continuing and Judd
+// Foundation, which does not exist until two years after he dies. Ending the
+// atlas at the death would cut the institution it is being built for, and would
+// contradict the argument permanent installation makes, that the placement
+// outlives the placer.
+export const TIME_MIN = 1900;
+export const TIME_MAX = 2025;
+
+// The life itself, marked on the track and used as the default sweep range. A
+// control called "Sweep the life" should sweep the life, not spend a quarter of
+// its run before he exists.
+export const JUDD_BORN = 1928;
+export const JUDD_DIED = 1994;

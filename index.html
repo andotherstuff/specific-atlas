@@ -7,7 +7,7 @@
   <title>SPECIFIC ATLAS—An Atlas of Donald Judd</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='8' y='7' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='14' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3Crect x='8' y='21' width='16' height='4' fill='none' stroke='%23000000' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://esm.sh" />
-  <link rel="stylesheet" href="./styles.css?v=25" />
+  <link rel="stylesheet" href="./styles.css?v=45" />
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 </head>
@@ -30,11 +30,38 @@
         </button>
       </section>
 
+      <!-- Order matters. Lens and Time are the same argument, what position
+           means and when, so they sit together at the top. Everything below
+           them filters what those two are showing. -->
       <section class="facet">
-        <h2>Lens</h2>
+        <h2>Lens <span class="hint" id="lens-hint">what position means</span></h2>
         <div class="seg" id="layout-toggle" role="tablist">
           <button data-layout="force" class="on" role="tab">Constellation</button>
           <button data-layout="geo" role="tab">Geography</button>
+          <button data-layout="time" role="tab">Timeline</button>
+        </div>
+      </section>
+
+      <section class="facet">
+        <h2>Time <span class="hint" id="time-readout"></span></h2>
+        <div id="time-track">
+          <div id="time-window"></div>
+          <div id="time-life" title="1928 to 1994"></div>
+          <input type="range" id="time-start" min="1900" max="2025" value="1900" step="1" />
+          <input type="range" id="time-end" min="1900" max="2025" value="2025" step="1" />
+        </div>
+        <div class="time-actions">
+          <button id="time-play">▶ Sweep the life</button>
+          <button id="time-reset" class="ghost">Reset</button>
+        </div>
+      </section>
+
+      <section class="facet" id="distance-wrap">
+        <h2>Distance <span class="hint" id="depth-readout">from Judd</span></h2>
+        <div class="seg" id="depth-toggle" role="tablist">
+          <button data-hops="1" role="tab">1 hop</button>
+          <button data-hops="2" role="tab">2 hops</button>
+          <button data-hops="" class="on" role="tab">All</button>
         </div>
       </section>
 
@@ -49,36 +76,15 @@
       </section>
 
       <section class="facet" id="notes-wrap">
-        <h2>My notes <span class="hint" id="note-count">none yet</span></h2>
+        <h2>My notes <span class="hint" id="note-count">none yet</span>
+          <button id="notes-export" class="link-btn">export</button>
+        </h2>
         <ul id="note-toggles" class="layers-list">
           <li class="layer-item" id="notes-only">
             <span class="layer-box"></span>
             <span class="layer-label">Only annotated</span>
           </li>
         </ul>
-        <button id="notes-export" class="ghost block">Export my notes</button>
-      </section>
-
-      <section class="facet">
-        <h2>Distance <span class="hint" id="depth-readout">from Judd</span></h2>
-        <div class="seg" id="depth-toggle" role="tablist">
-          <button data-hops="1" role="tab">1 hop</button>
-          <button data-hops="2" role="tab">2 hops</button>
-          <button data-hops="" class="on" role="tab">All</button>
-        </div>
-      </section>
-
-      <section class="facet">
-        <h2>Time <span class="hint" id="time-readout"></span></h2>
-        <div id="time-track">
-          <div id="time-window"></div>
-          <input type="range" id="time-start" min="1928" max="2020" value="1928" step="1" />
-          <input type="range" id="time-end" min="1928" max="2020" value="2020" step="1" />
-        </div>
-        <div class="time-actions">
-          <button id="time-play">▶ Sweep the life</button>
-          <button id="time-reset" class="ghost">Reset</button>
-        </div>
       </section>
 
       <section class="facet" id="geo-list-wrap" hidden>
@@ -205,6 +211,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/app.js?v=25"></script>
+  <script type="module" src="./src/app.js?v=45"></script>
 </body>
 </html>

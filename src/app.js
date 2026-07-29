@@ -1,5 +1,16 @@
-import { NODES, TYPES, TYPE_ORDER, buildIndex, TIME_MIN, TIME_MAX } from "./data.js?v=25";
-import { Graph } from "./graph.js?v=25";
+import {
+  NODES,
+  TYPES,
+  TYPE_ORDER,
+  buildIndex,
+  buildSalience,
+  edgeActiveAt,
+  TIME_MIN,
+  TIME_MAX,
+  JUDD_BORN,
+  JUDD_DIED,
+} from "./data.js?v=45";
+import { Graph } from "./graph.js?v=45";
 import {
   AtlasClient,
   FOUNDATION_PK,
@@ -22,7 +33,7 @@ import {
   neventFor,
   npubShort,
   signWithIdentity,
-} from "./nostr.js?v=25";
+} from "./nostr.js?v=45";
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -80,6 +91,42 @@ NODES.forEach((node) => {
   node._state = "curated";
 });
 
+// ---------------------------------------------------------------------------
+// Public contribution is built and wired, but hidden.
+//
+// The Foundation deprioritised public node proposals in favour of getting the
+// data and structure right first, so the sign-in block, the proposal queue and
+// the "Propose a node" button are taken off screen rather than out of the code.
+// Every path still works: signing, proposing, moderation, the review queue at
+// #review, and the provenance layers that depend on them. Flip this to true and
+// the whole surface comes back.
+//
+// It is hidden rather than deleted for a second reason. The provenance
+// machinery underneath is what lets the atlas show machine-detected entities as
+// unsigned and unverified, which is the part the Foundation does want.
+const SHOW_CONTRIBUTION = false;
+
+// Degrees of separation is likewise built and working, just not on screen. The
+// hop filter, the depth computation over the whole graph, and the readout all
+// stay live; `graph.setDepth()` can still be called and the rings still exist
+// in the data. Only the control is gone, so the rail stays about the data and
+// its structure rather than about ways to slice it.
+const SHOW_DISTANCE = false;
+
+const FEATURE_UI = [
+  [SHOW_CONTRIBUTION, ["#account-wrap", "#proposal-wrap", "#rail-foot", "#mobile-add", "#mobile-account"]],
+  [SHOW_DISTANCE, ["#distance-wrap"]],
+];
+
+function applyFeatureVisibility() {
+  for (const [shown, selectors] of FEATURE_UI) {
+    for (const sel of selectors) {
+      const el = $(sel);
+      if (el) el.hidden = !shown;
+    }
+  }
+}
+
 const mobileQuery = window.matchMedia("(max-width: 820px)");
 const uiState = {
   isMobile: mobileQuery.matches,
@@ -114,6 +161,12 @@ const graph = new Graph($("#graph"), {
     renderPanel(n ? index.byId.get(n.id) || n : null);
   },
   onVisibility: (visible, total) => refreshDepthReadout(visible, total),
+  salience: buildSalience(NODES, index.links),
+  edgeActiveAt,
+  timeMin: TIME_MIN,
+  timeMax: TIME_MAX,
+  juddBorn: JUDD_BORN,
+  juddDied: JUDD_DIED,
 });
 graph.setViewportMode(uiState.isMobile ? "mobile" : "desktop");
 window.addEventListener("resize", debounce(() => {
@@ -181,7 +234,6 @@ $("#panel-handle").addEventListener("click", () => {
 $("#mobile-menu").addEventListener("click", () => setRailOpen(true));
 $("#rail-scrim").addEventListener("click", () => setRailOpen(false));
 $("#mobile-add").addEventListener("click", () => $("#add-node").click());
-updateResponsiveState();
 
 // ---------------------------------------------------------------------------
 // Lens toggle (force vs geography)
@@ -194,6 +246,14 @@ $$("#layout-toggle button").forEach((b) =>
     uiState.layout = mode;
     graph.setLayout(mode);
     $("#geo-list-wrap").hidden = mode !== "geo";
+    // Each lens hides what it cannot place: geography drops nodes without
+    // coordinates, timeline drops nodes without dates. Say how many rather than
+    // letting them vanish quietly.
+    const undated = NODES.filter((n) => n.start == null && n.end == null).length;
+    $("#lens-hint").textContent =
+      mode === "geo" ? "position is place"
+      : mode === "time" ? `position is time · ${undated} undated hidden`
+      : "position is relationship";
     graph.setDepth(uiState.depthHops); // re-apply so the readout recounts for this lens
     if (uiState.isMobile) setRailOpen(false);
   })
@@ -277,8 +337,6 @@ $("#notes-only").addEventListener("click", () => {
   if (uiState.isMobile) setRailOpen(false);
 });
 
-graph.markNotes(new Set(Object.keys(notes)));
-refreshNoteFacet();
 
 $("#notes-export").addEventListener("click", () => {
   const entries = Object.entries(notes);
@@ -367,7 +425,6 @@ TYPE_ORDER.forEach((t) => {
   });
   legend.appendChild(li);
 });
-refreshLegendCounts();
 
 // ---------------------------------------------------------------------------
 // Time navigation (dual range + sweep)
@@ -391,26 +448,36 @@ function applyTime() {
   windowEl.style.left = `${((a - TIME_MIN) / span) * 100}%`;
   windowEl.style.right = `${((TIME_MAX - b) / span) * 100}%`;
   readout.textContent = `${a} – ${b}`;
+  const lifeEl = $("#time-life");
+  if (lifeEl) {
+    lifeEl.style.left = `${((JUDD_BORN - TIME_MIN) / span) * 100}%`;
+    lifeEl.style.right = `${((TIME_MAX - JUDD_DIED) / span) * 100}%`;
+  }
   const full = a === TIME_MIN && b === TIME_MAX;
   graph.setTime(full ? null : [a, b]);
+  // The window's end is the moment we read emphasis at. Sweeping advances it,
+  // so the same control serves both filtering and the playhead.
+  graph.setNow(b);
 }
 startEl.addEventListener("input", applyTime);
 endEl.addEventListener("input", applyTime);
-applyTime();
 
 let sweepTimer = null;
 $("#time-play").addEventListener("click", () => {
   if (sweepTimer) return stopSweep();
   $("#time-play").textContent = "❚❚ Pause";
+  // The track runs 1900 to 2025 so the inheritance and the afterlife both have
+  // somewhere to sit, but the sweep runs the life. Starting at 1900 spent a
+  // quarter of the run before Judd existed, with nothing moving.
   startEl.value = TIME_MIN;
-  let yr = TIME_MIN;
+  let yr = JUDD_BORN;
   endEl.value = yr;
   applyTime();
   sweepTimer = setInterval(() => {
     yr += 1;
     endEl.value = yr;
     applyTime();
-    if (yr >= TIME_MAX) stopSweep();
+    if (yr >= JUDD_DIED) stopSweep();
   }, 90);
 });
 function stopSweep() {
@@ -448,7 +515,6 @@ function renderGeoList() {
     geoList.appendChild(li);
   });
 }
-renderGeoList();
 
 // ---------------------------------------------------------------------------
 // Search
@@ -676,6 +742,29 @@ function renderPanel(n) {
   edgeSection.append(edgeHead, edgeList);
   body.append(edgeSection);
 
+  // A link out, never an image in. The Foundation holds the rights to the
+  // photographs and the media decision is still open (see D13/D14), so the
+  // atlas points at the work rather than reproducing it. That is also the more
+  // Juddian answer: the actual object is the work, its image is not.
+  if (n.url) {
+    const seeAlso = elem("div", "p-section p-seealso");
+    // Only promise a single work when the link actually lands on one. Three of
+    // these point at the gallery index because no individual page was verified
+    // for them, and "view this work" would be writing a cheque the link cannot
+    // cash.
+    const isWorkPage = /\/art\/[^/]+\/?$/.test(new URL(n.url).pathname);
+    const a = elem(
+      "a",
+      "seealso-link",
+      isWorkPage ? "View this work on juddfoundation.org" : "Find this in the works index on juddfoundation.org"
+    );
+    a.href = n.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    seeAlso.append(a);
+    body.append(seeAlso);
+  }
+
   body.append(noteSection(n));
 
   const prov = elem("div", "p-section p-prov");
@@ -697,7 +786,9 @@ function renderPanel(n) {
       : n._state === "accepted"
       ? "● Archivist-approved contribution"
       : n._state === "detected"
-      ? "○ Detected in existing text · unverified, awaiting review"
+      ? n.source
+        ? `○ Unverified · from ${n.source}`
+        : "○ Detected in existing text · unverified, awaiting review"
       : n._state === "proposed"
       ? "● Pending archivist review"
       : n._state === "rejected"
@@ -1269,7 +1360,6 @@ $$("#review-filters button").forEach((b) => {
   });
 });
 window.addEventListener("hashchange", routeReview);
-routeReview();
 
 // ---------------------------------------------------------------------------
 // Provenance layers: what the viewer sees in the graph.
@@ -1363,7 +1453,10 @@ function renderLayerToggles() {
   wrap.replaceChildren();
   const signedIn = !!currentIdentity;
   const counts = layerCounts();
-  for (const l of LAYERS) {
+  // With contribution hidden there is no way to sign in, so the auth-gated
+  // layers can only ever show a dash. Drop them rather than list dead rows.
+  const shown = LAYERS.filter((l) => SHOW_CONTRIBUTION || !l.auth);
+  for (const l of shown) {
     const disabled = l.auth && !signedIn;
     const on = activeLayers.has(l.key) && !disabled;
     const li = elem("li", `layer-item${on ? " on" : ""}${disabled ? " disabled" : ""}`);
@@ -1415,8 +1508,6 @@ async function onIdentityChanged() {
   }
 }
 
-renderLayerToggles();
-graph.setLayers(activeLayers);
 
 (async function boot() {
   try {
@@ -1440,7 +1531,6 @@ graph.setLayers(activeLayers);
     console.warn("Nostr boot issue:", err);
   }
 })();
-renderProposalQueue();
 
 // ---------------------------------------------------------------------------
 // Add-node modal
@@ -1735,4 +1825,26 @@ if (restoreIdentity()) {
   refreshProfile();
   onIdentityChanged();
 }
+
+// ---------------------------------------------------------------------------
+// Bootstrap
+//
+// Every call that reads module state runs here, after the whole module has
+// evaluated. Scattered through the file they were a trap: a call placed above
+// a `let` it depends on throws in the temporal dead zone, and because the graph
+// has already rendered by then the page looks alive while every statement after
+// the throw is silently skipped. The whole left rail goes blank and nothing in
+// the console points at the cause.
+// ---------------------------------------------------------------------------
+applyFeatureVisibility();
+updateResponsiveState();
+graph.markNotes(new Set(Object.keys(notes)));
+refreshNoteFacet();
+refreshLegendCounts();
+applyTime();
+renderGeoList();
+routeReview();
+renderLayerToggles();
+graph.setLayers(activeLayers);
+renderProposalQueue();
 renderIdentity();

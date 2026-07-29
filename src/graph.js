@@ -2,7 +2,17 @@
 const d3 = window.d3;
 
 export class Graph {
-  constructor(svgEl, { nodes, links, types, onSelect, onVisibility }) {
+  // `salience` and `edgeActiveAt` are injected rather than imported: this file
+  // has no imports by design, and bump-cache.sh only rewrites the ?v= pins in
+  // index.html and app.js, so an import here would go stale on release.
+  constructor(svgEl, { nodes, links, types, onSelect, onVisibility, salience, edgeActiveAt, timeMin, timeMax, juddBorn, juddDied }) {
+    this.timeMin = timeMin ?? 1900;
+    this.timeMax = timeMax ?? 2025;
+    this.juddBorn = juddBorn ?? 1928;
+    this.juddDied = juddDied ?? 1994;
+    this.salience = salience || null;
+    this.edgeActiveAt = edgeActiveAt || (() => true);
+    this.now = null;
     this.svg = d3.select(svgEl);
     this.types = types;
     this.onSelect = onSelect || (() => {});
@@ -445,6 +455,30 @@ export class Graph {
     this._applyVisibility();
   }
 
+  // The moment salience is read at. The sweep advances the window's end, so the
+  // end doubles as a playhead and no second control is needed.
+  setNow(year) {
+    this.now = year;
+    this._applySalience();
+  }
+
+  // Emphasis, not existence. A node still in the graph can be dim because the
+  // dated record around it is thin at this moment: the Foundation's point that
+  // colour and anti-illusionism both persist while one comes to the fore.
+  _applySalience() {
+    if (!this.nodeSel || !this.salience || this.now == null) return;
+    const weight = (d) => this.salience.at(d.id, this.now);
+    this.nodeSel.style("--salience", (d) => weight(d).toFixed(3));
+    this.nodeSel.classed("ascendant", (d) => weight(d) > 0.85);
+    this.linkSel.style("--salience", (d) =>
+      Math.min(weight(this._endpoint(d.source)), weight(this._endpoint(d.target))).toFixed(3)
+    );
+  }
+
+  _endpoint(value) {
+    return typeof value === "object" && value ? value : { id: value };
+  }
+
   // Provenance layers: canonical / approved / mine / following (see app.js).
   // A node's layer lives on d._layer; null activeLayers means no layer filtering.
   setLayers(activeSet) {
@@ -501,6 +535,8 @@ export class Graph {
     // (most people/ideas, and works without coordinates) can't sit on a map.
     // Nodes folded into a cluster marker are hidden until the cluster is opened.
     if (this.layout === "geo" && (d.lat == null || d.lon == null || d._clustered)) return false;
+    // Same rule for time: a node with no date has no position on this axis.
+    if (this.layout === "time" && this._startYear(d) == null) return false;
     // "Only annotated" is a mode, not another filter in the stack. Someone
     // asking to see their own notes means all of them: composing this with the
     // layer, type and time filters hides notes the person just wrote, which
@@ -517,9 +553,23 @@ export class Graph {
   _applyVisibility() {
     this.nodeSel.classed("hidden", (d) => !this._visible(d));
     const vis = new Set(this.nodes.filter((d) => this._visible(d)).map((d) => d.id));
-    this.linkSel.classed("hidden", (d) => !(vis.has(this._id(d.source)) && vis.has(this._id(d.target))));
+    // A relationship can be absent while both its ends are present: Judd and
+    // architecture both exist in 1940, the relationship between them does not.
+    this.linkSel.classed(
+      "hidden",
+      (d) =>
+        !(vis.has(this._id(d.source)) && vis.has(this._id(d.target))) || !this._edgeInTime(d)
+    );
     this._applyZoomDetail();
+    this._applySalience();
     this.onVisibility(vis.size, this.nodes.length);
+  }
+
+  // An edge with no recorded time is timeless and always present, so the 125
+  // un-annotated edges keep working exactly as before.
+  _edgeInTime(d) {
+    if (!this.timeRange || !d.when) return true;
+    return this.edgeActiveAt(d.when, this.timeRange[1]);
   }
 
   // ---- layouts ----------------------------------------------------------
@@ -527,11 +577,199 @@ export class Graph {
     if (mode === this.layout) return;
     this.layout = mode;
     if (mode === "geo") this._geoLayout();
+    else if (mode === "time") this._timeLayout();
     else this._forceLayout();
+  }
+
+  _startYear(n) {
+    return n.start != null ? n.start : n.end != null ? n.end : null;
+  }
+
+  // Node radius is tuned for the constellation, where there is room to spread.
+  // Pinned to a date inside a lane, the same dots overlap into a smear, so the
+  // timeline draws them smaller.
+  _radiusFor(d) {
+    return this.layout === "time" ? Math.max(3.5, d.r * 0.5) : d.r;
+  }
+
+  // Re-apply the sizes that depend on the current lens.
+  _applyRadii() {
+    if (!this.nodeSel) return;
+    const r = (d) => this._radiusFor(d);
+    this.nodeSel.select(".node-hit").attr("r", (d) => Math.max(this._settings().hitRadius, r(d) + 8));
+    this.nodeSel.select(".node-dot").attr("r", r);
+    this.nodeSel.select(".node-ring").attr("r", (d) => r(d) + 4);
+    this.nodeSel.select(".note-pip").attr("cx", (d) => r(d) * 0.78).attr("cy", (d) => -r(d) * 0.78);
+    this.nodeSel.select(".node-label").attr("dy", (d) => -r(d) - 6);
+  }
+
+  // The third projection. Constellation means position is relationship,
+  // Geography means position is place, Timeline means position is when.
+  //
+  // Time runs DOWN and categories run ACROSS, which is the shape of the
+  // Foundation's own timeline spreadsheets: rows are periods, columns are
+  // categories. Only y is pinned, because the year is exact; the horizontal is
+  // free so collision can spread a crowded decade sideways inside its column
+  // rather than stacking nodes on top of each other.
+  _timeLayout() {
+    this.k = 1;
+    this.transform = d3.zoomIdentity;
+    this.svg.node().__zoom = d3.zoomIdentity;
+    this.root.attr("transform", d3.zoomIdentity);
+    this.gCluster.selectAll("*").remove();
+    this._clusters = [];
+    this._hideClusterPop();
+    for (const n of this.nodes) n._clustered = false;
+
+    // A reserved gutter for the lane names, so labels never sit under the data.
+    const padL = 116;
+    const padR = 26;
+    const padT = 30;
+    const padB = 34; // decade numbers along the foot
+
+    // Fit the axis to the years actually plotted rather than to the full atlas
+    // span. Nothing in the data sits after 1996, so scaling to 2025 spent a
+    // quarter of the canvas on empty afterlife. The bounds still run to 2025
+    // for the scrubber and for salience; this is only how the axis is drawn.
+    const plotted = this.nodes.map((n) => this._startYear(n)).filter((y) => y != null);
+    const lo = plotted.length ? Math.min(...plotted) : this.timeMin;
+    const hi = plotted.length ? Math.max(...plotted) : this.timeMax;
+    const domainLo = Math.floor((lo - 4) / 10) * 10;
+    const domainHi = Math.ceil((hi + 4) / 10) * 10;
+    const span = domainHi - domainLo || 1;
+    const plotW = this.W - padL - padR;
+    const x = (year) => padL + ((year - domainLo) / span) * plotW;
+    this._timeX = x;
+    this._timeDomain = [domainLo, domainHi];
+
+    const order = Object.keys(this.types);
+    const laneH = (this.H - padT - padB) / order.length;
+    const laneY = (type) => padT + order.indexOf(type) * laneH + laneH / 2;
+
+    const seen = {};
+    for (const n of this.nodes) {
+      const year = this._startYear(n);
+      if (year == null) {
+        n.fx = null;
+        n.fy = null;
+        continue; // undated nodes are not plotted; the rail reports how many
+      }
+      n.fx = x(year);
+      n.fy = null;
+      n._laneY = laneY(n.type);
+      // Snap into the lane rather than drifting toward it. The vertical force
+      // only resolves over ticks, so a node entering this lens keeps whatever y
+      // the constellation left it with, and if alpha decays before it arrives it
+      // settles in the wrong band entirely. The small offset gives collision
+      // something to push against; identical positions deadlock it.
+      seen[n.type] = (seen[n.type] || 0) + 1;
+      n.y = n._laneY + ((seen[n.type] % 5) - 2) * 1.5;
+    }
+
+    this._drawTimeGuides({ x, laneY, laneH, order, padL, padR, padT, padB });
+
+    this.simulation.force("geoX", null);
+    this.simulation.force("geoY", null);
+    this.simulation.force("colX", null);
+    this.simulation.force("charge").strength(-8);
+    this.simulation.force("link").strength(0);
+    this.simulation.force("collide").radius((d) => this._radiusFor(d) + 2.5);
+    // Hold each node in its lane but let it ride up and down inside it, so a
+    // crowded decade grows vertically instead of overlapping.
+    this.simulation.force("laneY", d3.forceY((d) => d._laneY ?? this.H / 2).strength(0.34));
+    this._applyRadii();
+    this.simulation.alpha(0.8).restart();
+    this._applyVisibility();
+  }
+
+  // The chart furniture: lane bands, decade rules, and the life.
+  //
+  // Drawn as rules and intervals rather than boxes and fills. Equal lane heights
+  // and an even decade interval do the organising, which is the same logic the
+  // work runs on: one thing after another, at a fixed interval, with nothing
+  // emphasised over anything else. The only filled shape is the life, and it is
+  // barely there.
+  _drawTimeGuides({ x, laneY, laneH, order, padL, padR, padT, padB }) {
+    const g = this.gMap;
+    g.selectAll("*").remove();
+
+    const [domainLo, domainHi] = this._timeDomain;
+    const clamp = (year) => Math.min(domainHi, Math.max(domainLo, year));
+    const right = this.W - padR;
+    const foot = this.H - padB;
+    const bornX = x(clamp(this.juddBorn));
+    const diedX = x(clamp(this.juddDied));
+
+    // 1. The life, behind everything.
+    g.append("rect")
+      .attr("class", "time-life")
+      .attr("x", bornX)
+      .attr("y", padT)
+      .attr("width", Math.max(0, diedX - bornX))
+      .attr("height", foot - padT);
+    for (const edge of [bornX, diedX]) {
+      g.append("line")
+        .attr("class", "time-life-edge")
+        .attr("x1", edge).attr("x2", edge)
+        .attr("y1", padT - 8).attr("y2", foot);
+    }
+
+    // 2. Decade rules, hairline, full height of the field.
+    const step = 10;
+    for (let year = Math.ceil(domainLo / step) * step; year <= domainHi; year += step) {
+      g.append("line")
+        .attr("class", "time-rule")
+        .attr("x1", x(year)).attr("x2", x(year))
+        .attr("y1", padT).attr("y2", foot);
+      g.append("text")
+        .attr("class", "time-tick")
+        .attr("x", x(year)).attr("y", foot + 18)
+        .attr("text-anchor", "middle")
+        .text(year);
+    }
+
+    // 3. Lane separators. Equal intervals, hairline, edge to edge.
+    for (let i = 0; i <= order.length; i++) {
+      const y = padT + i * laneH;
+      g.append("line")
+        .attr("class", i === 0 || i === order.length ? "time-lane-edge" : "time-lane-rule")
+        .attr("x1", padL - 16).attr("x2", right)
+        .attr("y1", y).attr("y2", y);
+    }
+
+    // 4. Lane names in the gutter, each with its own colour, left aligned so
+    //    they read as a list rather than as labels chasing the data.
+    for (const type of order) {
+      const cy = laneY(type);
+      g.append("rect")
+        .attr("class", "time-lane-swatch")
+        .attr("x", 14).attr("y", cy - 5)
+        .attr("width", 9).attr("height", 9)
+        .attr("fill", this._typeDef(type).color);
+      g.append("text")
+        .attr("class", "time-lane-label")
+        .attr("x", 31).attr("y", cy + 3)
+        .text(this._typeDef(type).label);
+    }
+
+    // 5. The two dates that bound the life, set above the field.
+    for (const mark of [
+      { at: bornX, text: String(this.juddBorn), anchor: "start" },
+      { at: diedX, text: String(this.juddDied), anchor: "end" },
+    ]) {
+      g.append("text")
+        .attr("class", "time-life-label")
+        .attr("x", mark.at + (mark.anchor === "start" ? 5 : -5))
+        .attr("y", padT - 13)
+        .attr("text-anchor", mark.anchor)
+        .text(mark.text);
+    }
   }
 
   _forceLayout() {
     const settings = this._settings();
+    this.simulation.force("laneY", null);
+    this.simulation.force("colX", null);
     this.gMap.selectAll("*").remove();
     this.gCluster.selectAll("*").remove();
     this._clusters = [];
@@ -549,11 +787,14 @@ export class Graph {
       .strength(0.25);
     this.simulation.force("charge").strength(settings.charge);
     this.simulation.force("collide").radius((d) => d.r + settings.collisionPadding);
+    this._applyRadii();
     this.simulation.alpha(0.9).restart();
     this._applyVisibility();
   }
 
   _geoLayout() {
+    this.simulation.force("laneY", null);
+    this.simulation.force("colX", null);
     // Reset any leftover zoom so the projection fit is correct and clusters are
     // computed at k=1. (Set d3-zoom's stored transform directly to avoid firing
     // the zoom handler.)
@@ -592,6 +833,7 @@ export class Graph {
     this.simulation.force("charge").strength(-30);
     this.simulation.force("link").strength(0.05).distance(30);
     this.simulation.force("collide").radius((d) => d.r + this._settings().collisionPadding);
+    this._applyRadii();
     this.simulation.alpha(0.3).restart();
     this._recomputeGeoClusters();
     this._hideClusterPop();
@@ -712,7 +954,12 @@ export class Graph {
     this.W = box.width;
     this.H = box.height;
     this.simulation.force("center", d3.forceCenter(this.W / 2, this.H / 2));
+    // Both projected layouts pin positions from the canvas size, so a resize
+    // has to reproject. Without this the timeline keeps the width it was built
+    // with and crams the whole life into the left third when the detail panel
+    // collapses.
     if (this.layout === "geo") this._geoLayout();
+    else if (this.layout === "time") this._timeLayout();
     else this.simulation.alpha(0.3).restart();
     window.setTimeout(() => this.fitToView({ duration: 250, force: false }), 250);
   }
@@ -728,6 +975,7 @@ export class Graph {
     this.simulation.nodes(this.nodes);
     this.simulation.force("link").links(this.links);
     if (this.layout === "geo") this._geoLayout();
+    else if (this.layout === "time") this._timeLayout();
     else this._forceLayout();
     this._applyVisibility();
     this._applyHighlight(this.selectedId);
